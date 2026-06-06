@@ -1,0 +1,12 @@
+# Ignore IntelliJ IDE folders and project files
+.idea/
+*.iml
+*.iws
+
+# Ignore OS files
+Thumbs.db
+.DS_Store
+
+# Global build/dependency backups just in case
+**/node_modules/
+**/target/
