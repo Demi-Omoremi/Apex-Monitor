@@ -1,9 +1,11 @@
 package com.apex.monitor.service;
 
 import com.apex.monitor.model.TriggeredAlert;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class NotificationConsumerService {
 
@@ -25,7 +27,16 @@ public class NotificationConsumerService {
                 alert.symbol(), alert.triggeredPrice(), alert.condition(), alert.targetPrice(), alert.timestamp());
         System.out.println("--------------------------------------------------\n");
 
-        service.broadcast("ALERT", alert);
+        log.info("Kafka interceptor captured triggered alert for symbol: {}", alert.symbol());
+
+        try {
+            service.broadcast("alert-update", alert);
+
+            log.debug("Successfully broadcasted alert ID {} to active dashboard clients", alert.id());
+        } catch (Exception error) {
+            log.error("Failed to stream alert. Error: {}", error.getMessage());
+        }
+
     }
 
 

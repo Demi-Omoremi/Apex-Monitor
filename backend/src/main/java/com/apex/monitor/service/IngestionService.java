@@ -37,7 +37,7 @@ public class IngestionService extends TextWebSocketHandler {
     private final AlertRuleRepository alertRuleRepository;
 
     private final Set<String> activeSubscriptions = ConcurrentHashMap.newKeySet();
-    private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA");
+    private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA", "FAKEPACA");
 
     public IngestionService(AlpacaAPI alpacaAPI, AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
                             KafkaTemplate<String, Object> kafkaTemplate, AlertRuleRepository alertRuleRepository,
@@ -55,11 +55,13 @@ public class IngestionService extends TextWebSocketHandler {
         try {
             StandardWebSocketClient client = new StandardWebSocketClient();
 
-            client.execute(this, "wss://stream.data.alpaca.markets/v2/iex");
+            client.execute(this, "wss://stream.data.alpaca.markets/v2/test");
             System.out.println("Connecting to Alpaca WebSocket Stream...");
         } catch (Exception e) {
             System.err.println("Failed to establish stream connection: " + e.getMessage());
         }
+
+
     }
 
     @Override
@@ -102,6 +104,8 @@ public class IngestionService extends TextWebSocketHandler {
                 alertRegistry.addAlert(entity);
                 subscribeToStock(entity.getSymbol());
             }
+
+            alertRegistry.addAlert("FAKEPACA", 100, "ABOVE");
 
 
             System.out.println("📊 Core baseline stream initiated for: " + baselineSymbols);

@@ -26,7 +26,7 @@ public class MarketConsumerService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final SseService service;
 
-    private static final long COOLDOWN_SECONDS = 60;
+    private static final long COOLDOWN_SECONDS = 5;
 
     public MarketConsumerService(MarketTickRepository marketTickRepository, AlertRegistry alertRegistry,
                                  KafkaTemplate<String, Object> kafkaTemplate, SseService service) {
