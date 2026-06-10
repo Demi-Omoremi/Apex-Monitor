@@ -97,12 +97,10 @@ import { DragDropVerticalIcon, CheckmarkCircle01Icon, Loading03Icon, MoreVertica
 
 export const schema = z.object({
   id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
+  symbol: z.string(),
+  price: z.number(),
+  size: z.number(),
+  timestamp: z.string(),
 })
 
 // Create a separate component for the drag handle
@@ -157,127 +155,153 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "header",
-    header: "Header",
+    accessorKey: "symbol",
+    header: "My Stocks",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
     enableHiding: false,
   },
   {
-    accessorKey: "type",
-    header: "Section Type",
+    accessorKey: "price",
+    header: "Current Price",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {row.original.type}
+          {row.original.price}
         </Badge>
       </div>
     ),
   },
+
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: "size",
+    header: "Size",
     cell: ({ row }) => (
-      <Badge variant="outline" className="px-1.5 text-muted-foreground">
-        {row.original.status === "Done" ? (
-          <HugeiconsIcon icon={CheckmarkCircle01Icon} strokeWidth={2} className="fill-green-500 dark:fill-green-400" />
-        ) : (
-          <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} />
-        )}
-        {row.original.status}
-      </Badge>
+        <div className="w-32">
+          <Badge variant="outline" className="px-1.5 text-muted-foreground">
+            {row.original.size}
+          </Badge>
+        </div>
     ),
   },
+
   {
-    accessorKey: "target",
-    header: () => <div className="w-full text-right">Target</div>,
+    accessorKey: "timestamp",
+    header: "Time",
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
+        <div className="w-32">
+          <Badge variant="outline" className="px-1.5 text-muted-foreground">
+            {row.original.timestamp}
+          </Badge>
+        </div>
     ),
   },
-  {
-    accessorKey: "limit",
-    header: () => <div className="w-full text-right">Limit</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
-  },
-  {
-    accessorKey: "reviewer",
-    header: "Reviewer",
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== "Assign reviewer"
-      if (isAssigned) {
-        return row.original.reviewer
-      }
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
-          </Label>
-          <Select
-            items={[
-              { label: "Eddie Lake", value: "Eddie Lake" },
-              { label: "Jamik Tashpulatov", value: "Jamik Tashpulatov" },
-            ]}
-          >
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
-            >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectGroup>
-                <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                <SelectItem value="Jamik Tashpulatov">
-                  Jamik Tashpulatov
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </>
-      )
-    },
-  },
+
+  //
+  // {
+  //   accessorKey: "status",
+  //   header: "Status",
+  //   cell: ({ row }) => (
+  //     <Badge variant="outline" className="px-1.5 text-muted-foreground">
+  //       {row.original.status === "Done" ? (
+  //         <HugeiconsIcon icon={CheckmarkCircle01Icon} strokeWidth={2} className="fill-green-500 dark:fill-green-400" />
+  //       ) : (
+  //         <HugeiconsIcon icon={Loading03Icon} strokeWidth={2} />
+  //       )}
+  //       {row.original.status}
+  //     </Badge>
+  //   ),
+  // },
+  // {
+  //   accessorKey: "target",
+  //   header: () => <div className="w-full text-right">Target</div>,
+  //   cell: ({ row }) => (
+  //     <form
+  //       onSubmit={(e) => {
+  //         e.preventDefault()
+  //         toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
+  //           loading: `Saving ${row.original.header}`,
+  //           success: "Done",
+  //           error: "Error",
+  //         })
+  //       }}
+  //     >
+  //       <Label htmlFor={`${row.original.id}-target`} className="sr-only">
+  //         Target
+  //       </Label>
+  //       <Input
+  //         className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
+  //         defaultValue={row.original.target}
+  //         id={`${row.original.id}-target`}
+  //       />
+  //     </form>
+  //   ),
+  // },
+  // {
+  //   accessorKey: "limit",
+  //   header: () => <div className="w-full text-right">Limit</div>,
+  //   cell: ({ row }) => (
+  //     <form
+  //       onSubmit={(e) => {
+  //         e.preventDefault()
+  //         toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
+  //           loading: `Saving ${row.original.header}`,
+  //           success: "Done",
+  //           error: "Error",
+  //         })
+  //       }}
+  //     >
+  //       <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
+  //         Limit
+  //       </Label>
+  //       <Input
+  //         className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
+  //         defaultValue={row.original.limit}
+  //         id={`${row.original.id}-limit`}
+  //       />
+  //     </form>
+  //   ),
+  // },
+  // {
+  //   accessorKey: "reviewer",
+  //   header: "Reviewer",
+  //   cell: ({ row }) => {
+  //     const isAssigned = row.original.reviewer !== "Assign reviewer"
+  //     if (isAssigned) {
+  //       return row.original.reviewer
+  //     }
+  //     return (
+  //       <>
+  //         <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
+  //           Reviewer
+  //         </Label>
+  //         <Select
+  //           items={[
+  //             { label: "Eddie Lake", value: "Eddie Lake" },
+  //             { label: "Jamik Tashpulatov", value: "Jamik Tashpulatov" },
+  //           ]}
+  //         >
+  //           <SelectTrigger
+  //             className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
+  //             size="sm"
+  //             id={`${row.original.id}-reviewer`}
+  //           >
+  //             <SelectValue placeholder="Assign reviewer" />
+  //           </SelectTrigger>
+  //           <SelectContent align="end">
+  //             <SelectGroup>
+  //               <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
+  //               <SelectItem value="Jamik Tashpulatov">
+  //                 Jamik Tashpulatov
+  //               </SelectItem>
+  //             </SelectGroup>
+  //           </SelectContent>
+  //         </Select>
+  //       </>
+  //     )
+  //   },
+  // },
   {
     id: "actions",
     cell: () => (
@@ -391,7 +415,7 @@ export function DataTable({
   }
   return (
     <Tabs
-      defaultValue="outline"
+      defaultValue="stocks"
       className="w-full flex-col justify-start gap-6"
     >
       <div className="flex items-center justify-between px-4 lg:px-6">
@@ -401,7 +425,7 @@ export function DataTable({
         <Select
           defaultValue="outline"
           items={[
-            { label: "Outline", value: "outline" },
+            { label: "My Stocks", value: "stocks" },
             { label: "Past Performance", value: "past-performance" },
             { label: "Key Personnel", value: "key-personnel" },
             { label: "Focus Documents", value: "focus-documents" },
@@ -416,7 +440,7 @@ export function DataTable({
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value="outline">Outline</SelectItem>
+              <SelectItem value="stocks">Outline</SelectItem>
               <SelectItem value="past-performance">Past Performance</SelectItem>
               <SelectItem value="key-personnel">Key Personnel</SelectItem>
               <SelectItem value="focus-documents">Focus Documents</SelectItem>
@@ -424,7 +448,7 @@ export function DataTable({
           </SelectContent>
         </Select>
         <TabsList className="hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:px-1 @4xl/main:flex">
-          <TabsTrigger value="outline">Outline</TabsTrigger>
+          <TabsTrigger value="stocks">My Stocks</TabsTrigger>
           <TabsTrigger value="past-performance">
             Past Performance <Badge variant="secondary">3</Badge>
           </TabsTrigger>
@@ -473,7 +497,7 @@ export function DataTable({
         </div>
       </div>
       <TabsContent
-        value="outline"
+        value="stocks"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
         <div className="overflow-hidden rounded-lg border">
@@ -675,10 +699,14 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
   const isMobile = useIsMobile()
   return (
     <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger render={<Button variant="link" className="w-fit px-0 text-left text-foreground" />}>{item.header}</DrawerTrigger>
+      <DrawerTrigger asChild>
+        <Button variant="link" className="w-fit px-0 text-left text-foreground">
+          {item.symbol}
+        </Button>
+      </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.header}</DrawerTitle>
+          <DrawerTitle>{item.symbol}</DrawerTitle>
           <DrawerDescription>
             Showing total visitors for the last 6 months
           </DrawerDescription>
@@ -743,115 +771,32 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
           )}
           <form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
-              <Input id="header" defaultValue={item.header} />
+              <Label htmlFor="symbol">Ticker Symbol</Label>
+              <Input id="symbol" value={item.symbol} readOnly />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
-                <Select
-                  defaultValue={item.type}
-                  items={[
-                    { label: "Table of Contents", value: "Table of Contents" },
-                    { label: "Executive Summary", value: "Executive Summary" },
-                    {
-                      label: "Technical Approach",
-                      value: "Technical Approach",
-                    },
-                    { label: "Design", value: "Design" },
-                    { label: "Capabilities", value: "Capabilities" },
-                    { label: "Focus Documents", value: "Focus Documents" },
-                    { label: "Narrative", value: "Narrative" },
-                    { label: "Cover Page", value: "Cover Page" },
-                  ]}
-                >
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Table of Contents">
-                        Table of Contents
-                      </SelectItem>
-                      <SelectItem value="Executive Summary">
-                        Executive Summary
-                      </SelectItem>
-                      <SelectItem value="Technical Approach">
-                        Technical Approach
-                      </SelectItem>
-                      <SelectItem value="Design">Design</SelectItem>
-                      <SelectItem value="Capabilities">Capabilities</SelectItem>
-                      <SelectItem value="Focus Documents">
-                        Focus Documents
-                      </SelectItem>
-                      <SelectItem value="Narrative">Narrative</SelectItem>
-                      <SelectItem value="Cover Page">Cover Page</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="price">Current Price</Label>
+                <Input id="price" value={item.price} readOnly />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  defaultValue={item.status}
-                  items={[
-                    { label: "Done", value: "Done" },
-                    { label: "In Progress", value: "In Progress" },
-                    { label: "Not Started", value: "Not Started" },
-                  ]}
-                >
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Done">Done</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Not Started">Not Started</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="size">Execution Size</Label>
+                <Input id="size" value={item.size} readOnly />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
-                <Input id="target" defaultValue={item.target} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
-                <Input id="limit" defaultValue={item.limit} />
-              </div>
-            </div>
+
             <div className="flex flex-col gap-3">
-              <Label htmlFor="reviewer">Reviewer</Label>
-              <Select
-                defaultValue={item.reviewer}
-                items={[
-                  { label: "Eddie Lake", value: "Eddie Lake" },
-                  { label: "Jamik Tashpulatov", value: "Jamik Tashpulatov" },
-                  { label: "Emily Whalen", value: "Emily Whalen" },
-                ]}
-              >
-                <SelectTrigger id="reviewer" className="w-full">
-                  <SelectValue placeholder="Select a reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                    <SelectItem value="Jamik Tashpulatov">
-                      Jamik Tashpulatov
-                    </SelectItem>
-                    <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="timestamp">Transaction Time</Label>
+              <Input id="timestamp" value={item.timestamp} readOnly />
             </div>
           </form>
         </div>
         <DrawerFooter>
           <Button>Submit</Button>
-          <DrawerClose render={<Button variant="outline" />}></DrawerClose>
+          <DrawerClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DrawerClose>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
