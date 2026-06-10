@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { toast } from "sonner"
 
 import {
   SidebarGroup,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/sidebar"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignCircleIcon } from "@hugeicons/core-free-icons"
+import {useState} from "react";
 
 export function NavMain({
                           items,
@@ -42,18 +44,56 @@ export function NavMain({
     icon?: React.ReactNode
   }[]
 }) {
-  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+
+  const[isOpen, setIsOpen] = useState(false)
+  const[isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    setIsSubmitting(true)
+
     const formData = new FormData(e.currentTarget)
 
     const alertData = {
-      ticker: formData.get("alertTicker"),
+      symbol: formData.get("alertTicker"),
       condition: formData.get("alertCondition"),
-      threshold: formData.get("alertThreshold"),
+      targetPrice: formData.get("alertThreshold"),
     }
 
     console.log("Activating Stream Monitor Alert:", alertData)
-    // Connect this object to your backend fetch call or state dispatcher
+
+    const alertRequestPromise = fetch("http://localhost:8080/api/alerts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(alertData),
+    }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error("Server error code received")
+      }
+      return response.json() // Pass backend map data down to the success injector
+    })
+
+    try {
+      await toast.promise(alertRequestPromise, {
+        loading: `Creating Live Data Alert for ${alertData.symbol}...`,
+        success: (data) => {
+          setIsOpen(false)
+          return `Success: Activated tracking for ${alertData.symbol}!`
+        },
+        error: (err) => {
+          return `Failed to Create Alert for ${alertData.symbol}.`
+        },
+      })
+
+
+
+    } catch (error) {
+      console.error("Intercepted request breakdown:", error)
+    } finally {
+      setIsSubmitting(false) // Release input and button states safely
+    }
   }
 
   return (
@@ -61,7 +101,7 @@ export function NavMain({
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <Dialog>
+              <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 {/* Uses Base UI 'render' wrapper to perfectly stretch full-width */}
                 <DialogTrigger
                     render={
