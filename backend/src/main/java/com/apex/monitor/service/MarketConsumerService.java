@@ -6,6 +6,7 @@ import com.apex.monitor.model.MarketTick;
 import com.apex.monitor.model.MarketTickEntity;
 import com.apex.monitor.model.TriggeredAlert;
 import com.apex.monitor.registry.AlertRegistry;
+import com.apex.monitor.registry.TickerTracker;
 import com.apex.monitor.repository.MarketTickRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -25,15 +26,17 @@ public class MarketConsumerService {
     private final Map<String, Instant> alertCooldownMap = new ConcurrentHashMap<>();
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final SseService service;
+    private final TickerTracker tickerTracker;
 
     private static final long COOLDOWN_SECONDS = 5;
 
     public MarketConsumerService(MarketTickRepository marketTickRepository, AlertRegistry alertRegistry,
-                                 KafkaTemplate<String, Object> kafkaTemplate, SseService service) {
+                                 KafkaTemplate<String, Object> kafkaTemplate, SseService service, TickerTracker tickerTracker) {
         this.marketTickRepository = marketTickRepository;
         this.alertRegistry = alertRegistry;
         this.kafkaTemplate = kafkaTemplate;
         this.service = service;
+        this.tickerTracker = tickerTracker;
 
     }
 
@@ -47,9 +50,12 @@ public class MarketConsumerService {
 
             entity.setTimestamp(marketTick.timestamp() != null ? marketTick.timestamp() : Instant.now());
 
+            tickerTracker.populatePopular(marketTick);
+
             checkTrigger(marketTick);
             marketTickRepository.save(entity);
             System.out.println("MarketTickEntity successfully saved to repository!");
+
 
             service.broadcast("TICK", marketTick);
 

@@ -5,6 +5,7 @@ import com.apex.monitor.config.AlpacaConfig;
 import com.apex.monitor.model.AlertRuleEntity;
 import com.apex.monitor.model.MarketTick;
 import com.apex.monitor.registry.AlertRegistry;
+import com.apex.monitor.registry.TickerTracker;
 import com.apex.monitor.repository.AlertRuleRepository;
 import net.jacobpeterson.alpaca.AlpacaAPI;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -28,26 +29,28 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class IngestionService extends TextWebSocketHandler {
-    private WebSocketSession currentSession;
+    private volatile WebSocketSession currentSession;
     private final AlpacaAPI alpacaAPI;
     private final AlpacaConfig alpacaConfig;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AlertRegistry alertRegistry;
     private final AlertRuleRepository alertRuleRepository;
+    private final TickerTracker tickerTracker;
 
     private final Set<String> activeSubscriptions = ConcurrentHashMap.newKeySet();
     private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA", "FAKEPACA");
 
     public IngestionService(AlpacaAPI alpacaAPI, AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
                             KafkaTemplate<String, Object> kafkaTemplate, AlertRuleRepository alertRuleRepository,
-                            AlertRegistry alertRegistry) {
+                            AlertRegistry alertRegistry, TickerTracker tickerTracker) {
         this.alpacaAPI = alpacaAPI;
         this.alpacaConfig = alpacaConfig;
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.alertRegistry = alertRegistry;
         this.alertRuleRepository = alertRuleRepository;
+        this.tickerTracker = tickerTracker;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -96,6 +99,7 @@ public class IngestionService extends TextWebSocketHandler {
             String subJson = String.format("{\"action\": \"subscribe\", \"trades\": %s}",
                     objectMapper.writeValueAsString(baselineSymbols));
             session.sendMessage(new TextMessage(subJson));
+            tickerTracker.initializePopular(baselineSymbols);
             activeSubscriptions.addAll(baselineSymbols);
 
 
@@ -104,8 +108,6 @@ public class IngestionService extends TextWebSocketHandler {
                 alertRegistry.addAlert(entity);
                 subscribeToStock(entity.getSymbol());
             }
-
-            alertRegistry.addAlert("FAKEPACA", 100, "ABOVE");
 
 
             System.out.println("📊 Core baseline stream initiated for: " + baselineSymbols);
@@ -120,6 +122,7 @@ public class IngestionService extends TextWebSocketHandler {
 
                     //Shoot into Kafka
                     kafkaTemplate.send("market-ticks", tick.symbol(), tick);
+
 
                     System.out.println("Successfully sent to KAFKA HOORAY!!!\n");
 
@@ -162,4 +165,6 @@ public class IngestionService extends TextWebSocketHandler {
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         System.err.println("Connection dropped! Reason: " + exception.getMessage());
     }
+
+
 }
