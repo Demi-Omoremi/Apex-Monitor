@@ -156,7 +156,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   },
   {
     accessorKey: "symbol",
-    header: "My Stocks",
+    header: "Ticker Symbol",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />
     },
@@ -358,6 +358,8 @@ export function DataTable({
   data: z.infer<typeof schema>[]
 }) {
   const [data, setData] = React.useState(() => initialData)
+    const [isLoading, setIsLoading] = React.useState(true)
+
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -369,6 +371,37 @@ export function DataTable({
     pageIndex: 0,
     pageSize: 10,
   })
+
+    React.useEffect(() => {
+        async function loadSubscriptions() {
+            try {
+                const response = await fetch("http://localhost:8080/api/streams/subscribe")
+
+                if (!response.ok) {
+                    throw new Error(`Failed to pull streaming channels: ${response.status}`)
+                }
+
+                const backendData = await response.json()
+
+                // Optional: Parse through Zod schema to validate incoming Java DTO shapes
+                const parsedData = z.array(schema).parse(backendData)
+
+                setData(parsedData)
+            } catch (error) {
+                console.error("Backend synchronisation failure:", error)
+                toast.error("Failed to sync subscriptions", {
+                    description: "Could not retrieve tracked assets from the streaming database.",
+                })
+            } finally {
+                setIsLoading(false)
+            }
+        }
+
+        loadSubscriptions()
+    }, [])
+
+
+
   const sortableId = React.useId()
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -403,6 +436,17 @@ export function DataTable({
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+
+    if (isLoading) {
+        return (
+            <div className="flex h-64 w-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <HugeiconsIcon icon={Loading03Icon} className="animate-spin size-4" />
+                Syncing active tracking streams...
+            </div>
+        )
+    }
+
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (active && over && active.id !== over.id) {
@@ -426,7 +470,7 @@ export function DataTable({
           defaultValue="outline"
           items={[
             { label: "My Stocks", value: "stocks" },
-            { label: "Past Performance", value: "past-performance" },
+            { label: "My Alerts", value: "alerts" },
             { label: "Key Personnel", value: "key-personnel" },
             { label: "Focus Documents", value: "focus-documents" },
           ]}
@@ -440,8 +484,8 @@ export function DataTable({
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value="stocks">Outline</SelectItem>
-              <SelectItem value="past-performance">Past Performance</SelectItem>
+              <SelectItem value="stocks">My Stocks</SelectItem>
+              <SelectItem value="alerts">My Alerts</SelectItem>
               <SelectItem value="key-personnel">Key Personnel</SelectItem>
               <SelectItem value="focus-documents">Focus Documents</SelectItem>
             </SelectGroup>
@@ -449,8 +493,8 @@ export function DataTable({
         </Select>
         <TabsList className="hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="stocks">My Stocks</TabsTrigger>
-          <TabsTrigger value="past-performance">
-            Past Performance <Badge variant="secondary">3</Badge>
+          <TabsTrigger value="alerts">
+            My Alerts <Badge variant="secondary">3</Badge>
           </TabsTrigger>
           <TabsTrigger value="key-personnel">
             Key Personnel <Badge variant="secondary">2</Badge>
@@ -636,7 +680,7 @@ export function DataTable({
         </div>
       </TabsContent>
       <TabsContent
-        value="past-performance"
+        value="alerts"
         className="flex flex-col px-4 lg:px-6"
       >
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
