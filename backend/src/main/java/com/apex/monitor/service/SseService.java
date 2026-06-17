@@ -6,33 +6,37 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class SseService {
 
-    private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final Map<String, List<SseEmitter>> channels = new ConcurrentHashMap<>();
 
-    public SseEmitter createConnection() {
+    public SseEmitter createConnection(String channel) {
         SseEmitter emitter = new SseEmitter(0L);
 
-        this.emitters.add(emitter);
 
-        emitter.onCompletion(() -> this.emitters.remove(emitter));
-        emitter.onTimeout(() -> this.emitters.remove(emitter));
-        emitter.onError((e) -> this.emitters.remove(emitter));
+        channels.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>()).add(emitter);
+
+        emitter.onCompletion(() -> removeEmitter(channel, emitter));
+        emitter.onTimeout(() -> removeEmitter(channel, emitter));
+        emitter.onError((e) -> removeEmitter(channel, emitter));
 
         try {
             emitter.send(SseEmitter.event().name("INIT").data("Connected to Apex Monitor Stream"));
         } catch (IOException e) {
-            this.emitters.remove(emitter);
+            removeEmitter(channel, emitter);
         }
 
         return emitter;
     }
 
 
-    public void broadcast(String eventName, Object data) {
+    public void broadcast(String channel, String eventName, Object data) {
+        List<SseEmitter> emitters = channels.get(channel);
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
 
         for (SseEmitter emitter: emitters) {
@@ -43,6 +47,18 @@ public class SseService {
             }
         }
 
-        this.emitters.removeAll(deadEmitters);
+        emitters.removeAll(deadEmitters);
+    }
+
+
+    private void removeEmitter(String channel, SseEmitter emitter) {
+        List<SseEmitter> emitters = channels.get(channel);
+        if (emitters != null) {
+            emitters.remove(emitter);
+            // Clean up empty channels to save memory
+            if (emitters.isEmpty()) {
+                channels.remove(channel);
+            }
+        }
     }
 }

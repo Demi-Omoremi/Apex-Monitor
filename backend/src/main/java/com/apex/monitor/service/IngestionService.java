@@ -58,7 +58,7 @@ public class IngestionService extends TextWebSocketHandler {
         try {
             StandardWebSocketClient client = new StandardWebSocketClient();
 
-            client.execute(this, "wss://stream.data.alpaca.markets/v2/test");
+            client.execute(this, "wss://stream.data.alpaca.markets/v2/iex");
             System.out.println("Connecting to Alpaca WebSocket Stream...");
         } catch (Exception e) {
             System.err.println("Failed to establish stream connection: " + e.getMessage());
@@ -99,7 +99,6 @@ public class IngestionService extends TextWebSocketHandler {
             String subJson = String.format("{\"action\": \"subscribe\", \"trades\": %s}",
                     objectMapper.writeValueAsString(baselineSymbols));
             session.sendMessage(new TextMessage(subJson));
-            tickerTracker.initializePopular(baselineSymbols);
             activeSubscriptions.addAll(baselineSymbols);
 
 

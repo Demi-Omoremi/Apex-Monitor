@@ -43,21 +43,24 @@ public class MarketConsumerService {
     @KafkaListener(topics = "market-ticks", groupId = "apex-monitor-group")
     public void consumeMarketTicks(MarketTick marketTick) {
         try {
+
+            MarketTick enriched = MarketTick.withPercentageChange(marketTick, tickerTracker.getOpenPrice(marketTick.symbol().toUpperCase().trim()));
+
             MarketTickEntity entity = new MarketTickEntity();
-            entity.setSymbol(marketTick.symbol());
-            entity.setPrice(marketTick.price());
-            entity.setSize(marketTick.size());
-
+            entity.setSymbol(enriched.symbol());
+            entity.setPrice(enriched.price());
+            entity.setSize(enriched.size());
             entity.setTimestamp(marketTick.timestamp() != null ? marketTick.timestamp() : Instant.now());
-
-            tickerTracker.populatePopular(marketTick);
+            entity.setPercentageChange(enriched.percentageChange());
 
             checkTrigger(marketTick);
+            tickerTracker.updateSubscriptions(enriched);
             marketTickRepository.save(entity);
-            System.out.println("MarketTickEntity successfully saved to repository!");
+
+            
 
 
-            service.broadcast("TICK", marketTick);
+            service.broadcast("dashboard", "TICK", enriched);
 
 
 

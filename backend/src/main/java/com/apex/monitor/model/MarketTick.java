@@ -12,5 +12,17 @@ public record MarketTick(
         @JsonProperty("p") double price,
         @JsonProperty("s") long size,
         @JsonProperty("t") Instant timestamp,
-        @JsonProperty("c") List<String> conditions
-) { }
+        @JsonProperty("c") List<String> conditions,
+        @JsonProperty("percentageChange") Double percentageChange
+) {
+
+    public MarketTick(String symbol, double price, long size, Instant timestamp, List<String> conditions) {
+        this(symbol, price, size, timestamp, conditions, 0.0);
+    }
+
+    // Factory method that computes percentageChange using a known open price
+    public static MarketTick withPercentageChange(MarketTick tick, double openPrice) {
+        double pctChange = openPrice == 0 ? 0.0 : ((tick.price() - openPrice) / openPrice) * 100;
+        return new MarketTick(tick.symbol(), tick.price(), tick.size(), tick.timestamp(), tick.conditions(), pctChange);
+    }
+}

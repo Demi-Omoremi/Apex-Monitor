@@ -96,15 +96,33 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { DragDropVerticalIcon, CheckmarkCircle01Icon, Loading03Icon, MoreVerticalCircle01Icon, LeftToRightListBulletIcon, ArrowDown01Icon, Add01Icon, ArrowLeftDoubleIcon, ArrowLeft01Icon, ArrowRight01Icon, ArrowRightDoubleIcon, ChartUpIcon } from "@hugeicons/core-free-icons"
 
 export const schema = z.object({
-  id: z.number(),
-  symbol: z.string(),
-  price: z.number(),
-  size: z.number(),
-  timestamp: z.string(),
-})
+  S: z.string(),
+  p: z.number(),
+  s: z.number(),
+  t: z.string(),
+  percentageChange: z.number().default(0.0)
+}).transform((incoming) => ({
+  // 2. Automatically transform it right into the format your UI components expect!
+  // Since Alpaca ticks don't have natural sequential IDs, use the symbol or a hash
+  id: incoming.S,
+  symbol: incoming.S,
+  price: incoming.p,
+  size: incoming.s,
+  timestamp: incoming.t,
+  percentageChange: incoming.percentageChange
+}))
+
+export type StockRowData = {
+  id: string;
+  symbol: string;
+  price: number;
+  size: number;
+  timestamp: string;
+  percentageChange: number;
+}
 
 // Create a separate component for the drag handle
-function DragHandle({ id }: { id: number }) {
+function DragHandle({ id }: { id: string }) {
   const { attributes, listeners } = useSortable({
     id,
   })
@@ -121,7 +139,7 @@ function DragHandle({ id }: { id: number }) {
     </Button>
   )
 }
-const columns: ColumnDef<z.infer<typeof schema>>[] = [
+const columns: ColumnDef<StockRowData>[] = [
   {
     id: "drag",
     header: () => null,
@@ -355,7 +373,7 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
 export function DataTable({
   data: initialData,
 }: {
-  data: z.infer<typeof schema>[]
+  data: StockRowData[]
 }) {
   const [data, setData] = React.useState(() => initialData)
     const [isLoading, setIsLoading] = React.useState(true)
@@ -375,7 +393,7 @@ export function DataTable({
     React.useEffect(() => {
         async function loadSubscriptions() {
             try {
-                const response = await fetch("http://localhost:8080/api/streams/subscribe")
+                const response = await fetch("http://localhost:8080/api/streams/subscription")
 
                 if (!response.ok) {
                     throw new Error(`Failed to pull streaming channels: ${response.status}`)

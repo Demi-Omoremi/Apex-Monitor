@@ -21,34 +21,34 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ChartUpIcon, ChartDownIcon } from "@hugeicons/core-free-icons"
 
-interface StockItem {
-  id: number
-  symbol: string
-  price: number
-  percentageChange: number
-  volumeDescription: string
-}
 
-function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElement | null>) {
+
+
+
+function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElement | null>, hasData: boolean) {
   const [api, setApi] = React.useState<CarouselApi>()
+  // 2. REMOVED the duplicate cardRef declaration here!
 
   const plugin = React.useMemo(
       () => Autoplay({ delay, stopOnInteraction: false, stopOnMouseEnter: true }),
       [delay]
   )
 
-  // Reset on slide change
   React.useEffect(() => {
     if (!api) return
     api.on("select", () => plugin.reset())
   }, [api, plugin])
 
-  // Pause/play based on viewport
   React.useEffect(() => {
+    // 3. hasData is now safely defined from the parameters
+    if (!hasData || !cardRef.current) return
+
     const observer = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
-            plugin.play()
+            if (plugin && typeof plugin.play === "function") {
+              plugin.play()
+            }
           } else {
             plugin.stop()
           }
@@ -56,11 +56,11 @@ function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElem
         { threshold: 0.5 }
     )
 
-    if (cardRef.current) observer.observe(cardRef.current)
+    observer.observe(cardRef.current)
     return () => observer.disconnect()
-  }, [plugin, cardRef])
+  }, [plugin, cardRef, hasData])
 
-  return { api, setApi, plugin }
+  return { api, setApi, plugin, cardRef }
 }
 
 export function SectionCards() {
@@ -69,17 +69,63 @@ export function SectionCards() {
   const card3Ref = React.useRef<HTMLDivElement>(null)
   const card4Ref = React.useRef<HTMLDivElement>(null)
 
-  const c1 = useCarouselAutoplay(4000, card1Ref)
-  const c2 = useCarouselAutoplay(5500, card2Ref)
-  const c3 = useCarouselAutoplay(7000, card3Ref)
-  const c4 = useCarouselAutoplay(8500, card4Ref)
-
   const [stocks] = React.useState<StockItem[]>([
     { id: 1, symbol: "AAPL", price: 182.40, percentageChange: 1.25, volumeDescription: "High retail buying volume" },
     { id: 2, symbol: "NVDA", price: 915.00, percentageChange: 5.42, volumeDescription: "Institutional accumulation detected" },
     { id: 3, symbol: "MSFT", price: 415.60, percentageChange: -0.85, volumeDescription: "Consolidating near key support" },
     { id: 4, symbol: "TSLA", price: 174.25, percentageChange: -2.10, volumeDescription: "Short-term options volatility" },
   ])
+
+  const [popularStocks, setPopularStocks] = React.useState<StockItem[]>([]);
+
+  const c1 = useCarouselAutoplay(4000, card1Ref, popularStocks.length > 0)
+  const c2 = useCarouselAutoplay(5500, card2Ref, stocks.length > 0)
+  const c3 = useCarouselAutoplay(7000, card3Ref, stocks.length > 0)
+  const c4 = useCarouselAutoplay(8500, card4Ref, stocks.length > 0)
+
+
+
+// Initial load
+  React.useEffect(() => {
+    console.log("Fetching popular stocks...")
+    fetch("http://localhost:8080/api/streams/subscription/popular") // Ensure this matches your Spring path exactly!
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          return res.json();
+        })
+        .then((data: MarketTickResponse[]) => {
+          const mapped: StockItem[] = data
+              .filter((tick): tick is MarketTickResponse => tick != null)
+              .map((tick, index) => ({
+                id: index + 1,
+                symbol: tick.S,
+                price: tick.p,
+                percentageChange: tick.percentageChange,
+                volumeDescription: ""
+              }));
+          setPopularStocks(mapped);
+          console.log(mapped)
+        })
+        .catch(err => console.error("Failed to load popular stocks:", err));
+  }, []);
+
+//Live updates
+  React.useEffect(() => {
+    const eventSource = new EventSource("http://localhost:8080/api/streams");
+
+    eventSource.addEventListener("TICK", (event) => {
+      const tick = JSON.parse(event.data);
+      setPopularStocks(prev =>
+          prev.map(stock =>
+              stock.symbol === tick.S
+                  ? { ...stock, price: tick.p, percentageChange: tick.percentageChange }
+                  : stock
+          )
+      );
+    });
+
+    return () => eventSource.close();
+  }, []);
 
   return (
       <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
@@ -100,7 +146,7 @@ export function SectionCards() {
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
             <CarouselContent className="-ml-0">
-              {stocks.map((stock) => {
+              {popularStocks.map((stock) => {
                 const isPositive = stock.percentageChange >= 0
 
                 return (

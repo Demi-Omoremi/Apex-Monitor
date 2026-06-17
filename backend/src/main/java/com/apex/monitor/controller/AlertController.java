@@ -54,14 +54,10 @@ public class AlertController {
     }
 
 
-    public void broadcastAlert(Object AlertData) {
-        sseService.broadcast("alert-update", AlertData);
-    }
-
-    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribeToAlerts() {
-        return sseService.createConnection();
-    }
+//    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+//    public SseEmitter streamSubscribedAlerts() {
+//        return sseService.createConnection("alerts");
+//    }
 
 
 }

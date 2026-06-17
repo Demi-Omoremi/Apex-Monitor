@@ -30,7 +30,7 @@ public class NotificationConsumerService {
         log.info("Kafka interceptor captured triggered alert for symbol: {}", alert.symbol());
 
         try {
-            service.broadcast("alert-update", alert);
+            service.broadcast("dashboard","alert-update", alert);
 
             log.debug("Successfully broadcasted alert ID {} to active dashboard clients", alert.id());
         } catch (Exception error) {

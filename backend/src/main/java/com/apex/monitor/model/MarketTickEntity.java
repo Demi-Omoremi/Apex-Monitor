@@ -23,5 +23,6 @@ public class MarketTickEntity {
     private Double price;
     private Long size;
     private Instant timestamp;
+    private Double percentageChange;
 
 }
