@@ -44,7 +44,7 @@ public class MarketConsumerService {
     public void consumeMarketTicks(MarketTick marketTick) {
         try {
 
-            MarketTick enriched = MarketTick.withPercentageChange(marketTick, tickerTracker.getOpenPrice(marketTick.symbol().toUpperCase().trim()));
+            MarketTick enriched = MarketTick.withPercentageChange(marketTick, tickerTracker.getClosingPrice(marketTick.symbol().toUpperCase().trim()));
 
             MarketTickEntity entity = new MarketTickEntity();
             entity.setSymbol(enriched.symbol());

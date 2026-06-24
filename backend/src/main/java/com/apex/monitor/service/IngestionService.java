@@ -40,6 +40,7 @@ public class IngestionService extends TextWebSocketHandler {
 
     private final Set<String> activeSubscriptions = ConcurrentHashMap.newKeySet();
     private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA", "FAKEPACA");
+    private  boolean subscriptionInitialized = false;
 
     public IngestionService(AlpacaAPI alpacaAPI, AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
                             KafkaTemplate<String, Object> kafkaTemplate, AlertRuleRepository alertRuleRepository,
@@ -83,6 +84,8 @@ public class IngestionService extends TextWebSocketHandler {
         session.sendMessage(new TextMessage(authJson));
 
 
+
+
     }
 
     @Override
@@ -96,20 +99,29 @@ public class IngestionService extends TextWebSocketHandler {
 
 
             // Now that you are officially inside, ask for the specific tickers you want
+
+
             String subJson = String.format("{\"action\": \"subscribe\", \"trades\": %s}",
-                    objectMapper.writeValueAsString(baselineSymbols));
+                    objectMapper.writeValueAsString(tickerTracker.getPopularSymbols()));
             session.sendMessage(new TextMessage(subJson));
-            activeSubscriptions.addAll(baselineSymbols);
 
+            tickerTracker.addAllSymbols(tickerTracker.getPopularSymbols());
 
-            //Add existing Alerts
-            for (AlertRuleEntity entity: alertRuleRepository.findAll()) {
-                alertRegistry.addAlert(entity);
-                subscribeToStock(entity.getSymbol());
+            if (!subscriptionInitialized) {
+                for (AlertRuleEntity entity: alertRuleRepository.findAll()) {
+                    alertRegistry.addAlert(entity);
+                    subscribeToStock(entity.getSymbol());
+                }
+                subscriptionInitialized = true;
             }
 
 
-            System.out.println("📊 Core baseline stream initiated for: " + baselineSymbols);
+
+
+
+
+
+//            System.out.println("📊 Core baseline stream initiated for: " + baselineSymbols);
 
         } else if (rawJson.contains("\"T\":\"t\"")){
             try {
@@ -134,7 +146,7 @@ public class IngestionService extends TextWebSocketHandler {
             // This is where you will parse the metrics and eventually hand them off to Kafka.
         }
 
-        System.out.println("Active subscriptions: " + activeSubscriptions.toString());
+        System.out.println("Active subscriptions: " + tickerTracker.getSubscriptionSymbols());
 
 
     }
@@ -143,7 +155,7 @@ public class IngestionService extends TextWebSocketHandler {
     public void subscribeToStock(String symbol) {
         String cleanSymbol = symbol.toUpperCase().trim();
 
-        if (activeSubscriptions.contains(cleanSymbol)) {
+        if (tickerTracker.isActiveSubscription(cleanSymbol)) {
             System.out.println("Already streaming data for " + cleanSymbol + ". Skipped redundant subscription.");
             return;
         }
@@ -152,8 +164,14 @@ public class IngestionService extends TextWebSocketHandler {
             try {
                 String subJson = String.format("{\"action\": \"subscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
                 currentSession.sendMessage(new TextMessage(subJson));
-                activeSubscriptions.add(cleanSymbol);
-                System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
+                MarketTick marketTick = tickerTracker.initMarketTick(cleanSymbol);
+                if (marketTick != null) {
+                    tickerTracker.addSubscription(tickerTracker.initMarketTick(cleanSymbol));
+                    System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
+                } else {
+                    System.err.println("Could not initialize market tick data for symbol: " + cleanSymbol + "(unsupported or test ticker).");
+                }
+
             } catch (Exception e) {
                 System.err.println("Failed to send dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
             }
