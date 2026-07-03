@@ -38,6 +38,8 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
 import { z } from "zod"
+import { schema, type StockRowData } from "./MarketTypes"
+
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "@/components/ui/badge"
@@ -95,31 +97,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { DragDropVerticalIcon, CheckmarkCircle01Icon, Loading03Icon, MoreVerticalCircle01Icon, LeftToRightListBulletIcon, ArrowDown01Icon, Add01Icon, ArrowLeftDoubleIcon, ArrowLeft01Icon, ArrowRight01Icon, ArrowRightDoubleIcon, ChartUpIcon } from "@hugeicons/core-free-icons"
 
-export const schema = z.object({
-  S: z.string(),
-  p: z.number(),
-  s: z.number(),
-  t: z.string(),
-  percentageChange: z.number().default(0.0)
-}).transform((incoming) => ({
-  // 2. Automatically transform it right into the format your UI components expect!
-  // Since Alpaca ticks don't have natural sequential IDs, use the symbol or a hash
-  id: incoming.S,
-  symbol: incoming.S,
-  price: incoming.p,
-  size: incoming.s,
-  timestamp: incoming.t,
-  percentageChange: incoming.percentageChange
-}))
 
-export type StockRowData = {
-  id: string;
-  symbol: string;
-  price: number;
-  size: number;
-  timestamp: string;
-  percentageChange: number;
-}
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: string }) {
@@ -347,7 +325,7 @@ const columns: ColumnDef<StockRowData>[] = [
     ),
   },
 ]
-function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
+function DraggableRow({ row }: { row: Row<StockRowData> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   })
@@ -370,12 +348,8 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
     </TableRow>
   )
 }
-export function DataTable({
-  data: initialData,
-}: {
-  data: StockRowData[]
-}) {
-  const [data, setData] = React.useState(() => initialData)
+export function DataTable() {
+  const [data, setData] = React.useState<StockRowData[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
 
   const [rowSelection, setRowSelection] = React.useState({})
@@ -757,7 +731,7 @@ const chartConfig = {
     color: "var(--primary)",
   },
 } satisfies ChartConfig
-function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
+function TableCellViewer({ item }: { item: StockRowData }) {
   const isMobile = useIsMobile()
   return (
     <Drawer direction={isMobile ? "bottom" : "right"}>
