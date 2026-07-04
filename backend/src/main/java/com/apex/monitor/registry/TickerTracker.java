@@ -1,6 +1,7 @@
 package com.apex.monitor.registry;
 
 import com.apex.monitor.config.AlpacaConfig;
+import com.apex.monitor.dto.StockItem;
 import com.apex.monitor.model.MarketBar;
 import com.apex.monitor.model.MarketTick;
 import jakarta.annotation.PostConstruct;
@@ -10,9 +11,11 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,8 +33,6 @@ public class TickerTracker {
 
     public TickerTracker(AlpacaConfig alpacaConfig) {
         this.alpacaConfig = alpacaConfig;
-
-
 
     }
 
@@ -89,6 +90,58 @@ public class TickerTracker {
         return closingPrice;
     }
 
+    public List<Double> getClosingPrices(List<String> symbols) throws IOException, InterruptedException {
+        List<Double> closingPrices = new ArrayList<>();
+        List<String> symbolsLeft = new ArrayList<>();
+
+        for (int i = 0; i < symbols.size(); i++) {
+            String clean = symbols.get(i).toUpperCase().trim();
+            if (prevClosingPrices.containsKey(clean)) {
+                closingPrices.add(prevClosingPrices.get(clean));
+            } else {
+                symbolsLeft.add(clean);
+            }
+        }
+
+        if (symbolsLeft.isEmpty()) {
+            return closingPrices;
+        }
+
+        String remaining = String.join(",", symbolsLeft);
+        String encoded = URLEncoder.encode(remaining, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://data.alpaca.markets/v2/stocks/snapshots?symbols=" + encoded + "&feed=delayed_sip"))
+                .header("accept", "application/json")
+                .header("APCA-API-KEY-ID", "••••")
+                .header("APCA-API-SECRET-KEY", "••••")
+                .method("GET", HttpRequest.BodyPublishers.noBody())
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        JsonNode root = mapper.readTree(response.body());
+
+        for (String symbol: symbolsLeft) {
+            String clean = symbol.toUpperCase().trim();
+            JsonNode snapshot = root.path(clean);
+            JsonNode prevDailyBar = snapshot.path("dailyBar");
+
+            if (!prevDailyBar.isMissingNode() && !prevDailyBar.isNull()) {
+                Double closingPrice = snapshot.path("prevDailyBar").path("c").asDouble();
+                prevClosingPrices.put(clean, closingPrice);
+                closingPrices.add(closingPrice);
+                if (!dailyBars.containsKey(clean)) {
+                    MarketBar dailyBar = mapper.treeToValue(prevDailyBar, MarketBar.class);
+                    dailyBars.put(clean, dailyBar);
+                }
+            } else {
+                throw new RuntimeException("DailyBar doesn't exist for this symbol");
+            }
+        }
+
+        return closingPrices;
+
+    }
+
     public boolean isValidSymbol(String symbol) {
         String cleanSymbol = symbol.toUpperCase().trim();
         return true;
@@ -111,8 +164,9 @@ public class TickerTracker {
 
     public Double getCurrentPrice(String symbol)  {
         String clean = symbol.toUpperCase().trim();
-        if (subscriptions.containsKey(clean)) {
-            return subscriptions.get(clean).price();
+        MarketTick tick = subscriptions.get(clean);
+        if (tick != null) {
+            return tick.price();
         }
 
         try {
@@ -151,7 +205,57 @@ public class TickerTracker {
         } else {
             throw new RuntimeException("DailyBar doesn't exist for this symbol");
         }
+    }
 
+    public List<MarketBar> getDailyBars(List<String> symbols) throws IOException, InterruptedException {
+        List<MarketBar> marketBarList = new ArrayList<>();
+        List<String> symbolsLeft = new ArrayList<>();
+
+        for (int i = 0; i < symbols.size(); i++) {
+            String clean = symbols.get(i).toUpperCase().trim();
+            if (dailyBars.containsKey(clean)) {
+                marketBarList.add(dailyBars.get(clean));
+            } else {
+                symbolsLeft.add(clean);
+            }
+        }
+
+        if (symbolsLeft.isEmpty()) {
+            return marketBarList;
+        }
+
+        String remaining = String.join(",", symbolsLeft);
+        String encoded = URLEncoder.encode(remaining, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://data.alpaca.markets/v2/stocks/snapshots?symbols=" + encoded + "&feed=delayed_sip"))
+                .header("accept", "application/json")
+                .header("APCA-API-KEY-ID", "••••")
+                .header("APCA-API-SECRET-KEY", "••••")
+                .method("GET", HttpRequest.BodyPublishers.noBody())
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        JsonNode root = mapper.readTree(response.body());
+
+        for (String symbol: symbolsLeft) {
+            String clean = symbol.toUpperCase().trim();
+            JsonNode snapshot = root.path(clean);
+            JsonNode dailyBarNode = snapshot.path("dailyBar");
+
+            if (!dailyBarNode.isMissingNode() && !dailyBarNode.isNull()) {
+                MarketBar dailyBar = mapper.treeToValue(dailyBarNode, MarketBar.class);
+                dailyBars.put(clean, dailyBar);
+                marketBarList.add(dailyBar);
+                if (!prevClosingPrices.containsKey(clean)) {
+                    Double closingPrice = snapshot.path("prevDailyBar").path("c").asDouble();
+                    prevClosingPrices.put(clean, closingPrice);
+                }
+            } else {
+                throw new RuntimeException("DailyBar doesn't exist for this symbol");
+            }
+        }
+
+        return marketBarList;
 
     }
 
@@ -196,6 +300,52 @@ public class TickerTracker {
     public void addAllSymbols(List<String> symbols) {
         for (String symbol: symbols) {
             addSymbol(symbol);
+        }
+    }
+
+    public double getPercentageChange(String symbol) {
+
+        String clean = symbol.toUpperCase().trim();
+        try {
+            double currentPrice = getCurrentPrice(clean);
+            double closingPrice = getClosingPrice(clean);
+            return ((currentPrice - closingPrice) / closingPrice) * 100;
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+
+    }
+
+    public StockItem getStockItem(String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        return new StockItem(clean, getCurrentPrice(clean), getPercentageChange(clean));
+    }
+
+    public List<StockItem> getStockItems(List<String> symbols) {
+        List<StockItem> stockItemList = new ArrayList<>();
+        ensureBarsCached(symbols);
+        for (String symbol: symbols) {
+            String clean = symbol.toUpperCase().trim();
+            Double currentPrice = getCurrentPrice(clean);
+            Double pctChange = getPercentageChange(clean);
+            stockItemList.add(new StockItem(symbol, currentPrice, pctChange));
+        }
+        return stockItemList;
+
+    }
+
+    private void ensureBarsCached(List<String> symbols) {
+        try {
+            getDailyBars(symbols);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // restore interrupt status
+            throw new RuntimeException("Interrupted while fetching daily bars", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to fetch daily bars from Alpaca", e);
         }
     }
 }
