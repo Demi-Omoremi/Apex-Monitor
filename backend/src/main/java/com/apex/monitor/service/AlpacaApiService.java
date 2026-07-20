@@ -156,6 +156,59 @@ public class AlpacaApiService {
         }
     }
 
+    public JsonNode getStockMovers() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/movers?top=50"))
+                    .header("accept", "application/json")
+                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
+                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
+                    .method("GET", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            return mapper.readTree(response.body());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Unable to fetch stock movers: ", e);
+        }
+    }
+
+    public JsonNode getMostActiveStocks() {
+        try {
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/most-actives?by=trades&top=50"))
+                    .header("accept", "application/json")
+                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
+                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
+                    .method("GET", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            JsonNode rootNode = mapper.readTree(response.body());
+            return rootNode.path("most_actives");
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Unable to fetch most active stocks: ", e);
+        }
+    }
+
+    public JsonNode getHighestVolumeStocks() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/most-actives?by=volume&top=50"))
+                    .header("accept", "application/json")
+                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
+                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
+                    .method("GET", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            return mapper.readTree(response.body());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Unable to fetch most active stocks: ", e);
+        }
+    }
+
 
 
 

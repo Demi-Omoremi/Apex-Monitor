@@ -142,4 +142,6 @@ public class MarketCalendarService {
                 .max(Comparator.naturalOrder())
                 .orElseThrow(() -> new IllegalStateException("No prior trading day found near " + today));
     }
+
+
 }

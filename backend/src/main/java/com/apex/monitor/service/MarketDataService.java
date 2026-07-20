@@ -35,6 +35,7 @@ public class MarketDataService {
     private final AlpacaConfig alpacaConfig;
     private final Map<String, Map<Timeframe, List<MarketBar>>> graphCache = new ConcurrentHashMap<>();
     private final TickerTracker tickerTracker;
+    private final AlpacaApiService alpacaApiService;
     private final MapperBuilder mapperBuilder;
     private final MarketCalendarService marketCalendarService;
 
@@ -48,11 +49,12 @@ public class MarketDataService {
 
 
     public MarketDataService(AlpacaConfig alpacaConfig, TickerTracker tickerTracker, MapperBuilder mapperBuilder,
-        MarketCalendarService marketCalendarService) {
+        MarketCalendarService marketCalendarService, AlpacaApiService alpacaApiService) {
         this.alpacaConfig = alpacaConfig;
         this.tickerTracker = tickerTracker;
         this.mapperBuilder = mapperBuilder;
         this.marketCalendarService = marketCalendarService;
+        this.alpacaApiService = alpacaApiService;
     }
 
 
@@ -103,140 +105,61 @@ public class MarketDataService {
     }
 
     public List<StockItem> getMostActive() {
-        try {
-            List<String> symbols = new ArrayList<>();
+        List<String> symbols = new ArrayList<>();
+        JsonNode rootNode = alpacaApiService.getMostActiveStocks();
+        JsonNode mostActive = rootNode.path("most_actives");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/most-actives?by=trades&top=50"))
-                    .header("accept", "application/json")
-                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            JsonNode rootNode = objectMapper.readTree(response.body());
-            JsonNode mostActive = rootNode.path("most_actives");
-            if (mostActive.isArray()) {
-                for (JsonNode node: mostActive) {
-                    symbols.add(node.path("symbol").asString());
-                }
+        if (mostActive.isArray()) {
+            for (JsonNode node: mostActive) {
+                symbols.add(node.path("symbol").asString());
             }
-
-            List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
-            return stockItemList;
-
-        } catch (RuntimeException e) {
-            throw new RuntimeException(e);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
+
+        return tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
     }
 
     public List<StockItem> getHighestVolumeStock() {
-        try {
-            List<String> symbols = new ArrayList<>();
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/most-actives?by=volume&top=50"))
-                    .header("accept", "application/json")
-                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            JsonNode rootNode = objectMapper.readTree(response.body());
-            JsonNode mostActive = rootNode.path("most_actives");
-            if (mostActive.isArray()) {
-                for (JsonNode node: mostActive) {
-                    symbols.add(node.path("symbol").asString());
-                }
+        List<String> symbols = new ArrayList<>();
+        JsonNode rootNode = alpacaApiService.getHighestVolumeStocks();
+        JsonNode mostActive = rootNode.path("most_actives");
+        if (mostActive.isArray()) {
+            for (JsonNode node: mostActive) {
+                symbols.add(node.path("symbol").asString());
             }
-
-            List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
-            return stockItemList;
-
-        } catch (RuntimeException e) {
-            throw new RuntimeException(e);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
 
-
-
-
+        return tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
     }
 
 
     public List<StockItem> getStockGainers() {
-        try {
-            List<String> symbols = new ArrayList<>();
+        List<String> symbols = new ArrayList<>();
+        JsonNode rootNode = alpacaApiService.getStockMovers();
+        JsonNode mostActive = rootNode.path("gainers");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/movers?top=50"))
-                    .header("accept", "application/json")
-                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            JsonNode rootNode = objectMapper.readTree(response.body());
-            JsonNode mostActive = rootNode.path("gainers");
-            if (mostActive.isArray()) {
-                for (JsonNode node: mostActive) {
-                    symbols.add(node.path("symbol").asString());
-                }
+        if (mostActive.isArray()) {
+            for (JsonNode node: mostActive) {
+                symbols.add(node.path("symbol").asString());
             }
-
-            List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
-            return stockItemList;
-
-        } catch (RuntimeException e) {
-            throw new RuntimeException(e);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
 
-
-
-
+        List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
+        return stockItemList;
     }
 
     public List<StockItem> getStockLosers() {
-        try {
-            List<String> symbols = new ArrayList<>();
+        List<String> symbols = new ArrayList<>();
+        JsonNode rootNode = alpacaApiService.getStockMovers();
+        JsonNode mostActive = rootNode.path("losers");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.alpaca.markets/v1beta1/screener/stocks/movers?top=50"))
-                    .header("accept", "application/json")
-                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            JsonNode rootNode = objectMapper.readTree(response.body());
-            JsonNode mostActive = rootNode.path("losers");
-            if (mostActive.isArray()) {
-                for (JsonNode node: mostActive) {
-                    symbols.add(node.path("symbol").asString());
-                }
+        if (mostActive.isArray()) {
+            for (JsonNode node: mostActive) {
+                symbols.add(node.path("symbol").asString());
             }
-
-            List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
-            return stockItemList;
-
-        } catch (RuntimeException e) {
-            throw new RuntimeException(e);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
 
-
-
-
+        List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
+        return stockItemList;
     }
 
 
