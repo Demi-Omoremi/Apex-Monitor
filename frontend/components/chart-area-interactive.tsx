@@ -65,13 +65,13 @@ function formatTick(value: string, timeRange: string): string {
 
   switch (timeRange) {
     case "1d":
-      return date.toLocaleString("en-US", {// Mon, Tue...
+      return date.toLocaleString("en-US", {
         hour:    "2-digit",
         minute:  "2-digit",
       })
     case "5d":
       return date.toLocaleString("en-US", {
-        weekday: "short",           // Mon, Tue...
+        weekday: "short",
         month: "short",
         day: "numeric",
         hour:    "2-digit",
@@ -79,15 +79,17 @@ function formatTick(value: string, timeRange: string): string {
       })
     case "30d":
       return date.toLocaleString("en-US", {
-        weekday: "short",           // Mon, Tue...
+        weekday: "short",
         month:   "short",
         day:     "numeric",
+        timeZone: "UTC",
       })
     default: // 3M, 6M, 1Y
       return date.toLocaleDateString("en-US", {
         month: "short",
         day:   "numeric",
-        year: "numeric"
+        year: "numeric",
+        timeZone: "UTC",
       })
   }
 }

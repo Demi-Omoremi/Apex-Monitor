@@ -23,7 +23,7 @@ export interface MarketBar {
 }
 
 export interface StockItem {
-    id: number
+    id?: number
     symbol: string
     price: number
     size?: number
@@ -31,6 +31,17 @@ export interface StockItem {
     conditions?: string[]
     percentageChange: number
     volumeDescription?: string
+}
+
+export interface News {
+    id: number
+    author: string
+    headline: string,
+    summary: string,
+    source: string
+    symbols: string[]
+    created_at: string
+    updated_at: string
 }
 
 export const schema = z.object({
@@ -50,4 +61,15 @@ export const schema = z.object({
 
 export type StockRowData = z.infer<typeof schema>
 
+export const newsSchema = z.object({
+    id: z.number(),
+    author: z.string(),
+    headline: z.string(),
+    summary: z.string(),
+    source: z.string(),
+    symbols: z.array(z.string()),
+    created_at: z.string(),
+    updated_at: z.string(),
+})
 
+export type NewsItem = z.infer<typeof newsSchema>

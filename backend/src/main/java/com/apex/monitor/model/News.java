@@ -1,5 +1,6 @@
 package com.apex.monitor.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.Instant;

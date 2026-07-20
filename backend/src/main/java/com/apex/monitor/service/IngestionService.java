@@ -129,13 +129,11 @@ public class IngestionService extends TextWebSocketHandler {
 
                 for (MarketTick tick: ticks) {
                     //test in terminal the data is coming out
-                    System.out.printf("TICK READOUT -> %s: $%.2f%n", tick.symbol(), tick.price());
 
                     //Shoot into Kafka
                     kafkaTemplate.send("market-ticks", tick.symbol(), tick);
 
 
-                    System.out.println("Successfully sent to KAFKA HOORAY!!!\n");
 
 
                 }
@@ -152,12 +150,12 @@ public class IngestionService extends TextWebSocketHandler {
     }
 
 
-    public void subscribeToStock(String symbol) {
+    public boolean subscribeToStock(String symbol) {
         String cleanSymbol = symbol.toUpperCase().trim();
 
         if (tickerTracker.isActiveSubscription(cleanSymbol)) {
             System.out.println("Already streaming data for " + cleanSymbol + ". Skipped redundant subscription.");
-            return;
+            return false;
         }
 
         if (currentSession != null && currentSession.isOpen()) {
@@ -166,8 +164,10 @@ public class IngestionService extends TextWebSocketHandler {
                 currentSession.sendMessage(new TextMessage(subJson));
                 MarketTick marketTick = tickerTracker.initMarketTick(cleanSymbol);
                 if (marketTick != null) {
-                    tickerTracker.addSubscription(tickerTracker.initMarketTick(cleanSymbol));
+                    tickerTracker.addSubscription(marketTick);
                     System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
+
+                    return true;
                 } else {
                     System.err.println("Could not initialize market tick data for symbol: " + cleanSymbol + "(unsupported or test ticker).");
                 }
@@ -176,7 +176,40 @@ public class IngestionService extends TextWebSocketHandler {
                 System.err.println("Failed to send dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
             }
         }
+
+        return false;
     }
+
+    public boolean unsubscribeFromStock(String symbol) {
+        String cleanSymbol = symbol.toUpperCase().trim();
+
+        if (!tickerTracker.isActiveSubscription(cleanSymbol)) {
+            System.out.println("Already not streaming data for " + cleanSymbol + ".");
+            return false;
+        }
+
+        if (currentSession != null && currentSession.isOpen()) {
+            try {
+                String unsubJson = String.format("{\"action\": \"unsubscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
+                currentSession.sendMessage(new TextMessage(unsubJson));
+                MarketTick removed = tickerTracker.removeSubscription(cleanSymbol);
+
+                if (removed != null) {
+                    System.out.println("Alpaca stream shrank! unsubscribed: " + cleanSymbol + ".");
+                    return true;
+                } else {
+                    System.err.println("Unable to delete " + cleanSymbol + " from subscription list.");
+                }
+
+            } catch (Exception e) {
+                System.err.println("Failed to delete dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
+            }
+        }
+
+        return false;
+    }
+
+
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {

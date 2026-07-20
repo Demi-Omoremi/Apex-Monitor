@@ -31,16 +31,16 @@ public class IngestionController {
         this.sseService = sseService;
     }
 
-    @PostMapping("/subscribe")
-    public ResponseEntity<Map<String, String>> subscribeToStock(@Valid @RequestBody StockRequest stockRequest) {
-
-        ingestionService.subscribeToStock(stockRequest.getSymbol());
-
-        return ResponseEntity.ok(Map.of(
-                "status", "SUCCESS",
-                "message", "Ingestion pipeline successfully expanded to track: " + stockRequest.getSymbol() + "."
-        ));
-    }
+//    @PostMapping("/subscribe")
+//    public ResponseEntity<Map<String, String>> subscribeToStock(@Valid @RequestBody StockRequest stockRequest) {
+//
+//        ingestionService.subscribeToStock(stockRequest.getSymbol());
+//
+//        return ResponseEntity.ok(Map.of(
+//                "status", "SUCCESS",
+//                "message", "Ingestion pipeline successfully expanded to track: " + stockRequest.getSymbol() + "."
+//        ));
+//    }
 
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter dashboardStream() {

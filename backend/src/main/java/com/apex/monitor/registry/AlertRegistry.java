@@ -38,4 +38,31 @@ public class AlertRegistry {
     public List<AlertRule> getAlertRules(String Symbol) {
         return alertRuleMap.get(Symbol.toUpperCase().trim());
     }
+
+    public AlertRule deleteAlert(String id, String symbol) {
+
+        List<AlertRule> alerts = alertRuleMap.get(symbol);
+        if (alerts == null) {
+            alertRuleMap.remove(symbol);
+            return null;
+        }
+
+        for (int i = 0; i < alerts.size(); i++) {
+            AlertRule check = alerts.get(i);
+
+            if (check.id().equalsIgnoreCase(id)) {
+                alerts.remove(i);
+                if (alerts.isEmpty()) {
+                    alertRuleMap.remove(symbol);
+                }
+                return check;
+            }
+        }
+
+        return null;
+    }
+
+    public List<AlertRule> deleteAlerts(String symbol) {
+        return alertRuleMap.remove(symbol);
+    }
 }

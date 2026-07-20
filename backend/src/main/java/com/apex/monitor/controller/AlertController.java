@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,7 +34,7 @@ public class AlertController {
         this.sseService = service;
     }
 
-    @PostMapping
+    @PostMapping("create-alert")
     public ResponseEntity<Map<String, String>> createAlert(@Valid @RequestBody AlertRequest alertRequest) {
 
         AlertRuleEntity entity = new AlertRuleEntity(null, alertRequest.getSymbol(), alertRequest.getTargetPrice(),
@@ -51,6 +52,32 @@ public class AlertController {
                 "status", "SUCCESS",
                 "message", "Dynamic alert criteria successfully locked for symbol: " + rule.symbol()
         ));
+    }
+
+    @DeleteMapping("/{symbol}/{id}")
+    public ResponseEntity<?> removeAlert(@PathVariable String id, @PathVariable String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        AlertRule removed = alertRegistry.deleteAlert(id, clean);
+        if (removed == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Failed to delete: " + clean);
+
+        }
+
+        return ResponseEntity.ok("Successfully deleted: " + clean);
+
+
+    }
+
+    @DeleteMapping("/{symbol}")
+    public ResponseEntity<?> removeAlerts(@PathVariable String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        List<AlertRule> removed = alertRegistry.deleteAlerts(clean);
+
+        if (removed == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Failed to deleted: " + clean);
+
+        }
+        return ResponseEntity.ok("Successfully deleted alerts associated with " + clean);
     }
 
 

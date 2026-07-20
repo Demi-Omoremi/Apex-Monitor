@@ -2,8 +2,12 @@ package com.apex.monitor.registry;
 
 import com.apex.monitor.config.AlpacaConfig;
 import com.apex.monitor.dto.StockItem;
+import com.apex.monitor.model.LatestTradeResponse;
 import com.apex.monitor.model.MarketBar;
 import com.apex.monitor.model.MarketTick;
+import com.apex.monitor.model.TradingDay;
+import com.apex.monitor.service.AlpacaApiService;
+import com.apex.monitor.service.MarketCalendarService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -17,6 +21,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,13 +33,14 @@ public class TickerTracker {
     private final Set<String> subscriptionSymbols = new HashSet<>();
     private final Map<String, Double> prevClosingPrices = new ConcurrentHashMap<>();
     private final Map<String, MarketBar> dailyBars = new ConcurrentHashMap<>();
-    private final AlpacaConfig alpacaConfig;
+    private final AlpacaApiService alpacaApiService;
+    private final MarketCalendarService marketCalendarService;
     ObjectMapper mapper = new ObjectMapper();
     HttpClient client = HttpClient.newHttpClient();
 
-    public TickerTracker(AlpacaConfig alpacaConfig) {
-        this.alpacaConfig = alpacaConfig;
-
+    public TickerTracker(AlpacaConfig alpacaConfig, AlpacaApiService alpacaApiService, MarketCalendarService marketCalendarService) {
+        this.alpacaApiService = alpacaApiService;
+        this.marketCalendarService = marketCalendarService;
     }
 
     public List<MarketTick> getPopularList() {
@@ -68,29 +75,19 @@ public class TickerTracker {
 
 
 
-    public double getClosingPrice(String symbol) throws IOException, InterruptedException {
+    public double getClosingPrice(String symbol)  {
         String key = symbol.toUpperCase().trim();
         if (prevClosingPrices.containsKey(key)) {
             return prevClosingPrices.get(key);
         }
 
-
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://data.alpaca.markets/v2/stocks/" + symbol + "/snapshot?feed=delayed_sip"))
-                .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                .GET()
-                .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
+        JsonNode root = alpacaApiService.getSnapShot(symbol);
         double closingPrice = root.path("prevDailyBar").path("c").asDouble();
         prevClosingPrices.put(key, closingPrice);
         return closingPrice;
     }
 
-    public List<Double> getClosingPrices(List<String> symbols) throws IOException, InterruptedException {
+    public List<Double> getClosingPrices(List<String> symbols)  {
         List<Double> closingPrices = new ArrayList<>();
         List<String> symbolsLeft = new ArrayList<>();
 
@@ -107,18 +104,7 @@ public class TickerTracker {
             return closingPrices;
         }
 
-        String remaining = String.join(",", symbolsLeft);
-        String encoded = URLEncoder.encode(remaining, StandardCharsets.UTF_8);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://data.alpaca.markets/v2/stocks/snapshots?symbols=" + encoded + "&feed=delayed_sip"))
-                .header("accept", "application/json")
-                .header("APCA-API-KEY-ID", "••••")
-                .header("APCA-API-SECRET-KEY", "••••")
-                .method("GET", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
+        JsonNode root = alpacaApiService.getSnapShots(symbolsLeft);
 
         for (String symbol: symbolsLeft) {
             String clean = symbol.toUpperCase().trim();
@@ -154,12 +140,21 @@ public class TickerTracker {
         subscriptionSymbols.add(cleanSymbol);
     }
 
-    public boolean isActiveSubscription(String symbol) {
-        if (!subscriptions.containsKey(symbol)) {
-            return false;
+    public MarketTick removeSubscription(String symbol) {
+        String clean = symbol.toUpperCase().trim();
+
+        if (subscriptions.containsKey(clean)) {
+            MarketTick removed = subscriptions.get(clean);
+            subscriptions.remove(clean);
+            return removed;
         }
 
-        return true;
+        return null;
+    }
+
+    public boolean isActiveSubscription(String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        return subscriptions.containsKey(clean);
     }
 
     public Double getCurrentPrice(String symbol)  {
@@ -186,16 +181,7 @@ public class TickerTracker {
             return dailyBars.get(clean);
         }
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://data.alpaca.markets/v2/stocks/" + clean + "/snapshot?feed=delayed_sip"))
-                .header("accept", "application/json")
-                .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                .method("GET", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
-
+        JsonNode root = alpacaApiService.getDailyBar(symbol);
         JsonNode dailyBarNode = root.path("dailyBar");
 
         if (dailyBarNode != null && !dailyBarNode.isNull()) {
@@ -224,18 +210,7 @@ public class TickerTracker {
             return marketBarList;
         }
 
-        String remaining = String.join(",", symbolsLeft);
-        String encoded = URLEncoder.encode(remaining, StandardCharsets.UTF_8);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://data.alpaca.markets/v2/stocks/snapshots?symbols=" + encoded + "&feed=delayed_sip"))
-                .header("accept", "application/json")
-                .header("APCA-API-KEY-ID", "••••")
-                .header("APCA-API-SECRET-KEY", "••••")
-                .method("GET", HttpRequest.BodyPublishers.noBody())
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        JsonNode root = mapper.readTree(response.body());
+        JsonNode root = alpacaApiService.getDailyBars(symbolsLeft);
 
         for (String symbol: symbolsLeft) {
             String clean = symbol.toUpperCase().trim();
@@ -264,20 +239,20 @@ public class TickerTracker {
     }
 
     public MarketTick initMarketTick(String symbol) {
+        ZonedDateTime nowNY = ZonedDateTime.now(MarketCalendarService.MARKET_ZONE);
+        LocalDate today = marketCalendarService.getMostRecentTradingDay(nowNY);
+        TradingDay tradingDay = marketCalendarService.getTradingDay(today);
+        JsonNode root = alpacaApiService.getLastTradeBeforeClose(symbol, today, tradingDay);
+        LatestTradeResponse lastTrade = mapper.convertValue(root, LatestTradeResponse.class);
 
-        try {
-            String clean = symbol.toUpperCase().trim();
-            MarketBar bar = getDailyBar(clean);
-            double closingPrice = getClosingPrice(clean);
-
-            double pctChange = closingPrice == 0 ? 0.0 : ((bar.close() - closingPrice) / closingPrice) * 100;
-            MarketTick tick = new MarketTick(clean, bar.close(), null, bar.timestamp(), null, pctChange);
-            return tick;
-
-        } catch (Exception e) {
-            System.err.println("Failed to initalize a market tick for " + symbol);
-            return new MarketTick(symbol, 0.0,0, Instant.now(), null);
+        if (lastTrade.trades() == null || lastTrade.trades().isEmpty()) {
+            throw new RuntimeException("No trades found for " + symbol + " on " + today);
         }
+
+        Double pctChange = getPercentageChange(symbol);
+        return lastTrade.toMarketTick(pctChange);
+
+
     }
 
     @PostConstruct
@@ -304,38 +279,57 @@ public class TickerTracker {
     }
 
     public double getPercentageChange(String symbol) {
-
-        String clean = symbol.toUpperCase().trim();
-        try {
-            double currentPrice = getCurrentPrice(clean);
-            double closingPrice = getClosingPrice(clean);
-            return ((currentPrice - closingPrice) / closingPrice) * 100;
-
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-
-
+        double currentPrice = getCurrentPrice(symbol);
+        double closingPrice = getClosingPrice(symbol);
+        return ((currentPrice - closingPrice) / closingPrice) * 100;
     }
 
     public StockItem getStockItem(String symbol) {
-        String clean = symbol.toUpperCase().trim();
-        return new StockItem(clean, getCurrentPrice(clean), getPercentageChange(clean));
+        return new StockItem(symbol, getCurrentPrice(symbol), getPercentageChange(symbol));
     }
 
     public List<StockItem> getStockItems(List<String> symbols) {
         List<StockItem> stockItemList = new ArrayList<>();
         ensureBarsCached(symbols);
         for (String symbol: symbols) {
-            String clean = symbol.toUpperCase().trim();
-            Double currentPrice = getCurrentPrice(clean);
-            Double pctChange = getPercentageChange(clean);
+            Double currentPrice = getCurrentPrice(symbol);
+            Double pctChange = getPercentageChange(symbol);
             stockItemList.add(new StockItem(symbol, currentPrice, pctChange));
         }
         return stockItemList;
 
+    }
+
+    public List<StockItem> getStockItems(List<String> symbols, Double floor) {
+        List<StockItem> stockItemList = new ArrayList<>();
+        ensureBarsCached(symbols);
+        for (String symbol: symbols) {
+            String clean = symbol.toUpperCase().trim();
+            Double currentPrice = getCurrentPrice(clean);
+
+            if (currentPrice < floor) continue;
+
+            Double pctChange = getPercentageChange(clean);
+            stockItemList.add(new StockItem(symbol, currentPrice, pctChange));
+        }
+        return stockItemList;
+    }
+
+    public List<StockItem> getStockItems(List<String> symbols, Double floor, int listSize) {
+        List<StockItem> stockItemList = new ArrayList<>();
+        ensureBarsCached(symbols);
+        for (String symbol: symbols) {
+            if (stockItemList.size() == listSize) return stockItemList;
+
+            String clean = symbol.toUpperCase().trim();
+            Double currentPrice = getCurrentPrice(clean);
+
+            if (currentPrice < floor) continue;
+
+            Double pctChange = getPercentageChange(clean);
+            stockItemList.add(new StockItem(symbol, currentPrice, pctChange));
+        }
+        return stockItemList;
     }
 
     private void ensureBarsCached(List<String> symbols) {
@@ -347,5 +341,13 @@ public class TickerTracker {
         } catch (IOException e) {
             throw new RuntimeException("Failed to fetch daily bars from Alpaca", e);
         }
+    }
+
+
+    private MarketTick getLatestQuote(String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        return null;
+
+
     }
 }

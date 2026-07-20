@@ -38,7 +38,7 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
 import { z } from "zod"
-import { schema, type StockRowData } from "./MarketTypes"
+import {NewsItem, newsSchema, schema, type StockRowData} from "./MarketTypes"
 
 
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -98,8 +98,39 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { DragDropVerticalIcon, CheckmarkCircle01Icon, Loading03Icon, MoreVerticalCircle01Icon, LeftToRightListBulletIcon, ArrowDown01Icon, Add01Icon, ArrowLeftDoubleIcon, ArrowLeft01Icon, ArrowRight01Icon, ArrowRightDoubleIcon, ChartUpIcon } from "@hugeicons/core-free-icons"
 
 
-
+function formatTimestamp(value: string): string {
+  const date = new Date(value)
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })
+}
 // Create a separate component for the drag handle
+
+function NewsRow({ item }: { item: NewsItem }) {
+  return (
+      <div className="rounded-lg border p-3">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{item.source}</span>
+          <span>{new Date(item.created_at).toLocaleString()}</span>
+        </div>
+        <p className="font-medium">{item.headline}</p>
+        <p className="line-clamp-2 text-sm text-muted-foreground">{item.summary}</p>
+        <div className="mt-1 flex gap-1">
+          {item.symbols.map((s) => (
+              <Badge key={s} variant="outline" className="px-1.5 text-muted-foreground">
+                {s}
+              </Badge>
+          ))}
+        </div>
+      </div>
+  )
+}
+
+
 function DragHandle({ id }: { id: string }) {
   const { attributes, listeners } = useSortable({
     id,
@@ -188,7 +219,7 @@ const columns: ColumnDef<StockRowData>[] = [
     cell: ({ row }) => (
         <div className="w-32">
           <Badge variant="outline" className="px-1.5 text-muted-foreground">
-            {row.original.timestamp}
+            {formatTimestamp(row.original.timestamp)}
           </Badge>
         </div>
     ),
@@ -392,6 +423,37 @@ export function DataTable() {
         loadSubscriptions()
     }, [])
 
+  const [marketNews, setMarketNews] = React.useState<NewsItem[]>([])
+  const [companyNews, setCompanyNews] = React.useState<NewsItem[]>([])
+  const [isNewsLoading, setIsNewsLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    async function loadNews() {
+      try {
+        const [marketRes, companyRes] = await Promise.all([
+          fetch("http://localhost:8080/api/streams/market/news"),
+          fetch("http://localhost:8080/api/streams/AAPL/news"),
+        ])
+        if (!marketRes.ok || !companyRes.ok) {
+          throw new Error("Failed to pull news")
+        }
+        const [marketData, companyData] = await Promise.all([
+          marketRes.json(),
+          companyRes.json(),
+        ])
+        console.log(JSON.stringify(marketData[0], null, 2))
+        setMarketNews(z.array(newsSchema).parse(marketData))
+        setCompanyNews(z.array(newsSchema).parse(companyData))
+      } catch (error) {
+        console.error("News sync failure:", error)
+        toast.error("Failed to sync market news")
+      } finally {
+        setIsNewsLoading(false)
+      }
+    }
+    loadNews()
+  }, [])
+
 
 
   const sortableId = React.useId()
@@ -463,8 +525,8 @@ export function DataTable() {
           items={[
             { label: "My Stocks", value: "stocks" },
             { label: "My Alerts", value: "alerts" },
-            { label: "Key Personnel", value: "key-personnel" },
-            { label: "Focus Documents", value: "focus-documents" },
+            { label: "Market News", value: "market-news" },
+            { label: "Company News", value: "company-news" },
           ]}
         >
           <SelectTrigger
@@ -478,8 +540,8 @@ export function DataTable() {
             <SelectGroup>
               <SelectItem value="stocks">My Stocks</SelectItem>
               <SelectItem value="alerts">My Alerts</SelectItem>
-              <SelectItem value="key-personnel">Key Personnel</SelectItem>
-              <SelectItem value="focus-documents">Focus Documents</SelectItem>
+              <SelectItem value="market-news">Market News</SelectItem>
+              <SelectItem value="company-news">Company News</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -488,10 +550,8 @@ export function DataTable() {
           <TabsTrigger value="alerts">
             My Alerts <Badge variant="secondary">3</Badge>
           </TabsTrigger>
-          <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
+          <TabsTrigger value="market-news">Market News</TabsTrigger>
+          <TabsTrigger value="company-news">Company News</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <DropdownMenu>
@@ -677,14 +737,34 @@ export function DataTable() {
       >
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
       </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+      <TabsContent value="market-news" className="flex flex-col gap-3 px-4 lg:px-6">
+        {isNewsLoading ? (
+            <div className="flex h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Syncing headlines...
+            </div>
+        ) : marketNews.length ? (
+            marketNews.map((item) => <NewsRow key={item.id} item={item} />)
+        ) : (
+            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+              No market news yet.
+            </div>
+        )}
       </TabsContent>
-      <TabsContent
-        value="focus-documents"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+
+      <TabsContent value="company-news" className="flex flex-col gap-3 px-4 lg:px-6">
+        {isNewsLoading ? (
+            <div className="flex h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Syncing headlines...
+            </div>
+        ) : companyNews.length ? (
+            companyNews.map((item) => <NewsRow key={item.id} item={item} />)
+        ) : (
+            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+              No company news yet.
+            </div>
+        )}
       </TabsContent>
     </Tabs>
   )

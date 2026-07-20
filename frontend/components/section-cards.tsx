@@ -27,6 +27,36 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 
 
+async function fetchStockList(
+    url: string,
+    setter: React.Dispatch<React.SetStateAction<StockItem[]>>,
+    setLoading: React.Dispatch<React.SetStateAction<boolean>>
+) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+    const data: StockItem[] = await res.json()
+
+    const mapped: StockItem[] = data
+        .filter((item): item is StockItem => item != null)
+        .map((item, index) => ({
+          ...item,
+          id: index + 1,
+          volumeDescription: item.volumeDescription ?? ""
+        }))
+
+    setter(mapped)
+  } catch (err) {
+    console.error(`Failed to load stocks from ${url}:`, err)
+    toast.error("Failed to load stock data", {
+      description: "Could not retrieve tracked assets from the streaming database.",
+    })
+  } finally {
+    setLoading(false)
+  }
+}
+
+
 function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElement | null>, hasData: boolean) {
   const [api, setApi] = React.useState<CarouselApi>()
   // 2. REMOVED the duplicate cardRef declaration here!
@@ -79,44 +109,41 @@ export function SectionCards() {
   ])
 
   const [popularStocks, setPopularStocks] = React.useState<StockItem[]>([]);
+  const [stockGainers, setStockGainers] = React.useState<StockItem[]>([]);
+  const [stockLosers, setStockLosers] = React.useState<StockItem[]>([]);
+  const [highestVolumeStocks, sethighestVolumeStocks] = React.useState<StockItem[]>([]);
+
   const [isLoading, setIsLoading] = React.useState(true);
 
   const c1 = useCarouselAutoplay(4000, card1Ref, popularStocks.length > 0)
-  const c2 = useCarouselAutoplay(5500, card2Ref, stocks.length > 0)
-  const c3 = useCarouselAutoplay(7000, card3Ref, stocks.length > 0)
-  const c4 = useCarouselAutoplay(8500, card4Ref, stocks.length > 0)
+  const c2 = useCarouselAutoplay(5500, card2Ref, stockGainers.length > 0)
+  const c3 = useCarouselAutoplay(7000, card3Ref, stockLosers.length > 0)
+  const c4 = useCarouselAutoplay(8500, card4Ref, highestVolumeStocks.length > 0)
 
 
 
 // Initial load
+// popular stocks
   React.useEffect(() => {
-    fetch("http://localhost:8080/api/streams/subscription/popular")
-        .then(res => {
-          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
-          return res.json()
-        })
-        .then((data: MarketTick[]) => {
-          const mapped: StockItem[] = data
-              .filter((tick): tick is MarketTick => tick != null)
-              .map((tick, index) => ({
-                id: index + 1,
-                symbol: tick.symbol,
-                price: tick.price,
-                percentageChange: tick.percentageChange,
-                volumeDescription: ""
-              }))
-          setPopularStocks(mapped)
-        })
-        .catch(err => {
-          console.error("Failed to load popular stocks:", err)
-          toast.error("Failed to load popular subscriptions", {
-            description: "Could not retrieve tracked assets from the streaming database.",
-          })
-        })
-        .finally(() => setIsLoading(false))  // ← now runs after fetch resolves
+    fetchStockList("http://localhost:8080/api/streams/stocks/most-active", setPopularStocks, setIsLoading)// ← now runs after fetch resolves
   }, [])
 
+  React.useEffect(() => {
+    fetchStockList("http://localhost:8080/api/streams/stocks/gainers", setStockGainers, setIsLoading)// ← now runs after fetch resolves
+  }, [])
+
+  React.useEffect(() => {
+    fetchStockList("http://localhost:8080/api/streams/stocks/losers", setStockLosers, setIsLoading)// ← now runs after fetch resolves
+  }, [])
+
+  React.useEffect(() => {
+    fetchStockList("http://localhost:8080/api/streams/stocks/highest-volume", sethighestVolumeStocks, setIsLoading)// ← now runs after fetch resolves
+  }, [])
+
+
+
 //Live updates
+  //popularStocks
   React.useEffect(() => {
     const eventSource = new EventSource("http://localhost:8080/api/streams");
 
@@ -144,7 +171,7 @@ export function SectionCards() {
 
           <CardHeader className="px-6 pt-0 pb-0">
             <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
-              POPULAR STOCKS
+              MOST ACTIVE STOCKS
             </h2>
           </CardHeader>
 
@@ -236,7 +263,7 @@ export function SectionCards() {
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
             <CarouselContent className="-ml-0">
-              {stocks.map((stock) => {
+              {stockGainers.map((stock) => {
                 const isPositive = stock.percentageChange >= 0
 
                 return (
@@ -304,7 +331,7 @@ export function SectionCards() {
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
             <CarouselContent className="-ml-0">
-              {stocks.map((stock) => {
+              {stockLosers.map((stock) => {
                 const isPositive = stock.percentageChange >= 0
 
                 return (
@@ -372,7 +399,7 @@ export function SectionCards() {
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
             <CarouselContent className="-ml-0">
-              {stocks.map((stock) => {
+              {highestVolumeStocks.map((stock) => {
                 const isPositive = stock.percentageChange >= 0
 
                 return (
