@@ -243,6 +243,7 @@ public class TickerTracker {
         LocalDate today = marketCalendarService.getMostRecentTradingDay(nowNY);
         TradingDay tradingDay = marketCalendarService.getTradingDay(today);
         JsonNode root = alpacaApiService.getLastTradeBeforeClose(symbol, today, tradingDay);
+        System.out.println("RAW TRADE RESPONSE for " + symbol + ": " + root.toString());
         LatestTradeResponse lastTrade = mapper.convertValue(root, LatestTradeResponse.class);
 
         if (lastTrade.trades() == null || lastTrade.trades().isEmpty()) {

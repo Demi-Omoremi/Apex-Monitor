@@ -68,40 +68,30 @@ public class MarketDataService {
             return graphCache.get(clean).get(timeframe);
         }
 
-        try {
-            LocalDate start = marketCalendarService.getStartDate(timeframe);
-            System.out.println("Timeframe: " + timeframe + " days=" + start + " -> start=" + start);
-            System.out.println("NOW IN NY: " + ZonedDateTime.now(MARKET_ZONE));
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://data.alpaca.markets/v2/stocks/"+clean+"/bars?timeframe="+timeframe.barSize+"&start="+start.toString()+"&limit=1000&adjustment=raw&feed=sip&sort=asc"))
-                    .header("accept", "application/json")
-                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-                    .method("GET", HttpRequest.BodyPublishers.noBody())
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            JsonNode root = objectMapper.readTree(response.body());
+        LocalDate start = marketCalendarService.getStartDate(timeframe);
+        System.out.println("Timeframe: " + timeframe + " days=" + start + " -> start=" + start);
+        System.out.println("NOW IN NY: " + ZonedDateTime.now(MARKET_ZONE));
+//            HttpRequest request = HttpRequest.newBuilder()
+//                    .uri(URI.create("https://data.alpaca.markets/v2/stocks/"+clean+"/bars?timeframe="+timeframe.barSize+"&start="+start.toString()+"&limit=1000&adjustment=raw&feed=sip&sort=asc"))
+//                    .header("accept", "application/json")
+//                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
+//                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
+//                    .method("GET", HttpRequest.BodyPublishers.noBody())
+//                    .build();
+//            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        JsonNode root = alpacaApiService.get("https://data.alpaca.markets/v2/stocks/"+clean+"/bars?timeframe="+timeframe.barSize+"&start="+start.toString()+"&limit=1000&adjustment=raw&feed=sip&sort=asc");
 
-            List<MarketBar> histBar = objectMapper.convertValue(
-                    root.path("bars"),
-                    objectMapper.getTypeFactory().constructCollectionType(List.class, MarketBar.class)
-            );
-            marketCalendarService.preloadForBars(histBar);
-            if (timeframe.isIntraday()) {
-                histBar.removeIf(bar -> !marketCalendarService.isMarketHours(bar));
-            }
+        List<MarketBar> histBar = objectMapper.convertValue(
+                root.path("bars"),
+                objectMapper.getTypeFactory().constructCollectionType(List.class, MarketBar.class)
+        );
+        marketCalendarService.preloadForBars(histBar);
+        if (timeframe.isIntraday()) {
+            histBar.removeIf(bar -> !marketCalendarService.isMarketHours(bar));
+        }
 
-            graphCache.get(clean).put(timeframe, histBar);
-            return histBar;
-
-
-
-        } catch (RuntimeException e) {
-            throw new RuntimeException("Error trying to get historical data: ", e);
-        } catch (IOException e) {
-            throw new RuntimeException("Error trying to get historical data: ", e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Error trying to get historical data: ", e);        }
+        graphCache.get(clean).put(timeframe, histBar);
+        return histBar;
     }
 
     public List<StockItem> getMostActive() {
@@ -161,6 +151,8 @@ public class MarketDataService {
         List<StockItem> stockItemList = tickerTracker.getStockItems(symbols, MIN_PRICE_FLOOR, UI_LIST_SIZE);
         return stockItemList;
     }
+
+
 
 
 }

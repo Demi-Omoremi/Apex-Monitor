@@ -62,10 +62,15 @@ public class AlpacaApiService {
         String start = open.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         String end = close.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
+        String feed = "iex";
+        if (ZonedDateTime.now().isAfter(close.plusMinutes(15))) {
+            feed = "sip";
+        }
+
         String url = "https://data.alpaca.markets/v2/stocks/" + symbol + "/trades"
                 + "?start=" + URLEncoder.encode(start, StandardCharsets.UTF_8)
                 + "&end=" + URLEncoder.encode(end, StandardCharsets.UTF_8)
-                + "&limit=1&feed=sip&sort=desc";
+                + "&limit=1&feed=" + feed + "&sort=desc";
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -185,8 +190,7 @@ public class AlpacaApiService {
                     .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-            JsonNode rootNode = mapper.readTree(response.body());
-            return rootNode.path("most_actives");
+            return mapper.readTree(response.body());
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException("Unable to fetch most active stocks: ", e);
         }
@@ -206,6 +210,23 @@ public class AlpacaApiService {
             return mapper.readTree(response.body());
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException("Unable to fetch most active stocks: ", e);
+        }
+    }
+
+    public JsonNode get(String url) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("accept", "application/json")
+                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
+                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return mapper.readTree(response.body());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Error calling Alpaca API: " + url, e);
         }
     }
 

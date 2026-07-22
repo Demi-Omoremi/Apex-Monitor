@@ -55,8 +55,18 @@ const TIMEFRAME_LABELS: Record<string, string> = {
   "365d": "1Y",
 }
 
+const TIMEFRAME_DESCRIPTIONS: Record<string, string> = {
+  "1d":   "Last 1 day",
+  "5d":   "Last 5 days",
+  "30d":  "Last 30 days",
+  "90d":  "Last 3 months",
+  "180d": "Last 6 months",
+  "365d": "Last 1 year",
+}
+
 interface ChartAreaInteractiveProps {
   symbol: string
+  symbolSelector?: React.ReactNode
 }
 
 // Helper outside your component
@@ -118,7 +128,7 @@ function useMarketBars(symbol: string, timeRange: string) {
   return state
 }
 
-export function ChartAreaInteractive({ symbol }: ChartAreaInteractiveProps) {
+export function ChartAreaInteractive({ symbol, symbolSelector }: ChartAreaInteractiveProps) {
   const isMobile = useIsMobile()
   const [timeRange, setTimeRange] = React.useState(() => isMobile ? "5d" : "90d")
 
@@ -138,6 +148,11 @@ export function ChartAreaInteractive({ symbol }: ChartAreaInteractiveProps) {
   return (
       <Card className="@container/card">
         <CardHeader>
+          {symbolSelector && (
+              <div className="mb-2 w-full max-w-sm">
+                {symbolSelector}
+              </div>
+          )}
           <CardTitle>
             {symbol}{" "}
             {latestClose != null && (
@@ -147,8 +162,7 @@ export function ChartAreaInteractive({ symbol }: ChartAreaInteractiveProps) {
             )}
           </CardTitle>
           <CardDescription>
-            <span className="hidden @[540px]/card:block">Close price · last 3 months</span>
-            <span className="@[540px]/card:hidden">Last 3 months</span>
+            <span>{TIMEFRAME_DESCRIPTIONS[timeRange] ?? "Last 3 months"}</span>
           </CardDescription>
           <CardAction>
             <ToggleGroup
