@@ -80,6 +80,11 @@ public class AlertController {
         return ResponseEntity.ok("Successfully deleted alerts associated with " + clean);
     }
 
+    @GetMapping("/{symbols}")
+    public ResponseEntity<?> getAlertsSnapShot(@PathVariable String symbol) {
+
+    }
+
 
 //    @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 //    public SseEmitter streamSubscribedAlerts() {

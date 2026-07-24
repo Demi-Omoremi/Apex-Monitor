@@ -30,7 +30,8 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 import type { MarketBar } from "@/components/MarketTypes" // ← adjust to your actual path
-
+import { HugeiconsIcon } from "@hugeicons/react"
+import {ArrowUp01Icon, ArrowDown01Icon, ArrowUpBigIcon, ArrowDownBigIcon} from "@hugeicons/core-free-icons"
 
 export const description = "An interactive area chart"
 
@@ -55,14 +56,6 @@ const TIMEFRAME_LABELS: Record<string, string> = {
   "365d": "1Y",
 }
 
-const TIMEFRAME_DESCRIPTIONS: Record<string, string> = {
-  "1d":   "Last 1 day",
-  "5d":   "Last 5 days",
-  "30d":  "Last 30 days",
-  "90d":  "Last 3 months",
-  "180d": "Last 6 months",
-  "365d": "Last 1 year",
-}
 
 interface ChartAreaInteractiveProps {
   symbol: string
@@ -136,9 +129,18 @@ export function ChartAreaInteractive({ symbol, symbolSelector }: ChartAreaIntera
 
 
   // Derive symbol + latest close for the header
-  const latestBar  = data[data.length - 1]
+  const latestBar = data[data.length - 1]
   const latestClose = latestBar?.close
   const latestTime = latestBar?.timestamp
+
+  const firstBar = data[0]
+  const firstClose = firstBar?.close
+
+  const priceChange =
+      latestClose != null && firstClose != null ? latestClose - firstClose : null
+  const percentChange =
+      priceChange != null && firstClose ? (priceChange / firstClose) * 100 : null
+  const isPositive = priceChange != null && priceChange >= 0
 
   // Use the last bar's timestamp as the reference "today"
 
@@ -162,7 +164,23 @@ export function ChartAreaInteractive({ symbol, symbolSelector }: ChartAreaIntera
             )}
           </CardTitle>
           <CardDescription>
-            <span>{TIMEFRAME_DESCRIPTIONS[timeRange] ?? "Last 3 months"}</span>
+            {priceChange != null && percentChange != null ? (
+                <span
+                    className={`inline-flex items-center gap-1 ${
+                        isPositive ? "text-green-500" : "text-destructive"
+                    }`}
+                >
+      <HugeiconsIcon
+          icon={isPositive ? ArrowUpBigIcon : ArrowDownBigIcon}
+          strokeWidth={2}
+          className="size-3.5"
+      />
+                  {Math.abs(percentChange).toFixed(2)}% ({isPositive ? "+" : "-"}
+                  {Math.abs(priceChange).toFixed(2)})
+    </span>
+            ) : (
+                <span className="text-muted-foreground">—</span>
+            )}
           </CardDescription>
           <CardAction>
             <ToggleGroup

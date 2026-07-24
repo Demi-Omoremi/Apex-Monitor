@@ -73,3 +73,12 @@ export const newsSchema = z.object({
 })
 
 export type NewsItem = z.infer<typeof newsSchema>
+
+export const alertRuleSchema = z.object({
+    id: z.string(),
+    symbol: z.string(),
+    targetPrice: z.number(),
+    condition: z.enum(["ABOVE", "BELOW", "ABOVE_OR_EQUAL", "BELOW_OR_EQUAL"]).catch("ABOVE"), // Adjust based on your exact Java enum/string values
+})
+
+export type AlertRule = z.infer<typeof alertRuleSchema>

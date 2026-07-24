@@ -38,7 +38,7 @@ export default function Page() {
                       }
                   />
                 </div>
-                <DataTable />
+                <DataTable symbol={symbol}/>
               </div>
             </div>
           </div>

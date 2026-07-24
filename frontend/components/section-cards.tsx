@@ -59,7 +59,6 @@ async function fetchStockList(
 
 function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElement | null>, hasData: boolean) {
   const [api, setApi] = React.useState<CarouselApi>()
-  // 2. REMOVED the duplicate cardRef declaration here!
 
   const plugin = React.useMemo(
       () => Autoplay({ delay, stopOnInteraction: false, stopOnMouseEnter: true }),
@@ -72,7 +71,6 @@ function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElem
   }, [api, plugin])
 
   React.useEffect(() => {
-    // 3. hasData is now safely defined from the parameters
     if (!hasData || !cardRef.current) return
 
     const observer = new IntersectionObserver(
@@ -95,25 +93,102 @@ function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElem
   return { api, setApi, plugin, cardRef }
 }
 
+// Small helper so we don't repeat the skeleton/empty/content branch 4x
+function CarouselBody({
+                        isLoading,
+                        stocks,
+                      }: {
+  isLoading: boolean
+  stocks: StockItem[]
+}) {
+  if (isLoading) {
+    return (
+        <CarouselContent className="-ml-0">
+          <CarouselItem className="pl-0">
+            <div className="flex h-[104px] w-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Syncing live streams...
+            </div>
+          </CarouselItem>
+        </CarouselContent>
+    )
+  }
+
+  if (stocks.length === 0) {
+    return (
+        <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
+          Failed to load stocks.
+        </div>
+    )
+  }
+
+
+  return (
+      <CarouselContent className="-ml-0">
+        {stocks.map((stock) => {
+          const isPositive = stock.percentageChange >= 0
+
+          return (
+              <CarouselItem key={stock.id} className="pl-0">
+                <div className="px-6 pt-1 pb-0">
+                  <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
+                    {stock.symbol}
+                  </span>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
+                      ${stock.price.toFixed(2)}
+                    </h3>
+                    <Badge
+                        variant={isPositive ? "outline" : "destructive"}
+                        className="flex gap-1 items-center shrink-0"
+                    >
+                      <HugeiconsIcon
+                          icon={isPositive ? ChartUpIcon : ChartDownIcon}
+                          strokeWidth={2}
+                          className="size-3.5"
+                      />
+                      {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
+                  <div className="line-clamp-1 flex gap-2 font-medium items-center">
+                    {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
+                    <HugeiconsIcon
+                        icon={isPositive ? ChartUpIcon : ChartDownIcon}
+                        strokeWidth={2}
+                        className="size-4 shrink-0"
+                    />
+                  </div>
+                  <div className="text-muted-foreground line-clamp-1">
+                    {stock.volumeDescription}
+                  </div>
+                </div>
+              </CarouselItem>
+          )
+        })}
+      </CarouselContent>
+  )
+}
+
 export function SectionCards() {
   const card1Ref = React.useRef<HTMLDivElement>(null)
   const card2Ref = React.useRef<HTMLDivElement>(null)
   const card3Ref = React.useRef<HTMLDivElement>(null)
   const card4Ref = React.useRef<HTMLDivElement>(null)
 
-  const [stocks] = React.useState<StockItem[]>([
-    { id: 1, symbol: "AAPL", price: 182.40, percentageChange: 1.25, volumeDescription: "High retail buying volume" },
-    { id: 2, symbol: "NVDA", price: 915.00, percentageChange: 5.42, volumeDescription: "Institutional accumulation detected" },
-    { id: 3, symbol: "MSFT", price: 415.60, percentageChange: -0.85, volumeDescription: "Consolidating near key support" },
-    { id: 4, symbol: "TSLA", price: 174.25, percentageChange: -2.10, volumeDescription: "Short-term options volatility" },
-  ])
-
   const [popularStocks, setPopularStocks] = React.useState<StockItem[]>([]);
   const [stockGainers, setStockGainers] = React.useState<StockItem[]>([]);
   const [stockLosers, setStockLosers] = React.useState<StockItem[]>([]);
   const [highestVolumeStocks, sethighestVolumeStocks] = React.useState<StockItem[]>([]);
 
-  const [isLoading, setIsLoading] = React.useState(true);
+  // Separate loading flags per card so one endpoint finishing doesn't hide
+  // the skeletons on the others
+  const [isLoadingPopular, setIsLoadingPopular] = React.useState(true);
+  const [isLoadingGainers, setIsLoadingGainers] = React.useState(true);
+  const [isLoadingLosers, setIsLoadingLosers] = React.useState(true);
+  const [isLoadingVolume, setIsLoadingVolume] = React.useState(true);
 
   const c1 = useCarouselAutoplay(4000, card1Ref, popularStocks.length > 0)
   const c2 = useCarouselAutoplay(5500, card2Ref, stockGainers.length > 0)
@@ -122,28 +197,26 @@ export function SectionCards() {
 
 
 
-// Initial load
-// popular stocks
+  // Initial load
   React.useEffect(() => {
-    fetchStockList("http://localhost:8080/api/streams/stocks/most-active", setPopularStocks, setIsLoading)// ← now runs after fetch resolves
+    fetchStockList("http://localhost:8080/api/streams/stocks/most-active", setPopularStocks, setIsLoadingPopular)
   }, [])
 
   React.useEffect(() => {
-    fetchStockList("http://localhost:8080/api/streams/stocks/gainers", setStockGainers, setIsLoading)// ← now runs after fetch resolves
+    fetchStockList("http://localhost:8080/api/streams/stocks/gainers", setStockGainers, setIsLoadingGainers)
   }, [])
 
   React.useEffect(() => {
-    fetchStockList("http://localhost:8080/api/streams/stocks/losers", setStockLosers, setIsLoading)// ← now runs after fetch resolves
+    fetchStockList("http://localhost:8080/api/streams/stocks/losers", setStockLosers, setIsLoadingLosers)
   }, [])
 
   React.useEffect(() => {
-    fetchStockList("http://localhost:8080/api/streams/stocks/highest-volume", sethighestVolumeStocks, setIsLoading)// ← now runs after fetch resolves
+    fetchStockList("http://localhost:8080/api/streams/stocks/highest-volume", sethighestVolumeStocks, setIsLoadingVolume)
   }, [])
 
 
 
-//Live updates
-  //popularStocks
+  // Live updates
   React.useEffect(() => {
     const eventSource = new EventSource("http://localhost:8080/api/streams");
 
@@ -168,7 +241,6 @@ export function SectionCards() {
 
         {/* CARD 1: DYNAMIC US STOCKS CAROUSEL */}
         <Card ref={card1Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-
           <CardHeader className="px-6 pt-0 pb-0">
             <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
               MOST ACTIVE STOCKS
@@ -181,64 +253,8 @@ export function SectionCards() {
               plugins={[c1.plugin]}
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
-            {isLoading ? (
-                <div className="flex flex-col flex-1">
-                  <Skeleton className="h-8 mx-6 mt-1 mb-2" />
-                  <Skeleton className="flex-1 mx-6 " />
-                </div>
-            ) : popularStocks.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
-                  Failed to load stocks.
-                </div>
-            ) : (
-              <CarouselContent className="-ml-0">
-                {popularStocks.map((stock) => {
-                  const isPositive = stock.percentageChange >= 0
+            <CarouselBody isLoading={isLoadingPopular} stocks={popularStocks} />
 
-                  return (
-                      <CarouselItem key={stock.id} className="pl-0">
-                        <div className="px-6 pt-1 pb-0">
-                      <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
-                        {stock.symbol}
-                      </span>
-                          <div className="flex items-center justify-between">
-                            <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
-                              ${stock.price.toFixed(2)}
-                            </h3>
-                            <Badge
-                                variant={isPositive ? "outline" : "destructive"}
-                                className="flex gap-1 items-center shrink-0"
-                            >
-                              <HugeiconsIcon
-                                  icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                                  strokeWidth={2}
-                                  className="size-3.5"
-                              />
-                              {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Sliding Footer Content */}
-                        <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
-                          <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                            {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
-                            <HugeiconsIcon
-                                icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                                strokeWidth={2}
-                                className="size-4 shrink-0"
-                            />
-                          </div>
-                          <div className="text-muted-foreground line-clamp-1">
-                            {stock.volumeDescription}
-                          </div>
-                        </div>
-                      </CarouselItem>
-                  )
-                })}
-              </CarouselContent>
-            )}
-            {/* Floating Controls */}
             <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
               <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
             </div>
@@ -247,9 +263,9 @@ export function SectionCards() {
             </div>
           </Carousel>
         </Card>
+
         {/* CARD 2: STOCK GAINERS */}
         <Card ref={card2Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-
           <CardHeader className="px-6 pt-0 pb-0">
             <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
               Stock Gainers
@@ -262,62 +278,19 @@ export function SectionCards() {
               plugins={[c2.plugin]}
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
-            <CarouselContent className="-ml-0">
-              {stockGainers.map((stock) => {
-                const isPositive = stock.percentageChange >= 0
+            <CarouselBody isLoading={isLoadingGainers} stocks={stockGainers} />
 
-                return (
-                    <CarouselItem key={stock.id} className="pl-0">
-                      <div className="px-6 pt-1 pb-0">
-                    <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
-                      {stock.symbol}
-                    </span>
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
-                            ${stock.price.toFixed(2)}
-                          </h3>
-                          <Badge
-                              variant={isPositive ? "outline" : "destructive"}
-                              className="flex gap-1 items-center shrink-0"
-                          >
-                            <HugeiconsIcon
-                                icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                                strokeWidth={2}
-                                className="size-3.5"
-                            />
-                            {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Sliding Footer Content */}
-                      <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                          {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
-                          <HugeiconsIcon
-                              icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                              strokeWidth={2}
-                              className="size-4 shrink-0"
-                          />
-                        </div>
-                        <div className="text-muted-foreground line-clamp-1">
-                          {stock.volumeDescription}
-                        </div>
-                      </div>
-                    </CarouselItem>
-                )
-              })}
-            </CarouselContent>
-
-            {/* Floating Controls */}
-            <CarouselPrevious className="absolute left-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
-            <CarouselNext className="absolute right-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
+            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
+            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
           </Carousel>
         </Card>
 
         {/* CARD 3: STOCK LOSERS */}
         <Card ref={card3Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-
           <CardHeader className="px-6 pt-0 pb-0">
             <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
               Stock Losers
@@ -330,62 +303,19 @@ export function SectionCards() {
               plugins={[c3.plugin]}
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
-            <CarouselContent className="-ml-0">
-              {stockLosers.map((stock) => {
-                const isPositive = stock.percentageChange >= 0
+            <CarouselBody isLoading={isLoadingLosers} stocks={stockLosers} />
 
-                return (
-                    <CarouselItem key={stock.id} className="pl-0">
-                      <div className="px-6 pt-1 pb-0">
-                    <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
-                      {stock.symbol}
-                    </span>
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
-                            ${stock.price.toFixed(2)}
-                          </h3>
-                          <Badge
-                              variant={isPositive ? "outline" : "destructive"}
-                              className="flex gap-1 items-center shrink-0"
-                          >
-                            <HugeiconsIcon
-                                icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                                strokeWidth={2}
-                                className="size-3.5"
-                            />
-                            {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Sliding Footer Content */}
-                      <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                          {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
-                          <HugeiconsIcon
-                              icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                              strokeWidth={2}
-                              className="size-4 shrink-0"
-                          />
-                        </div>
-                        <div className="text-muted-foreground line-clamp-1">
-                          {stock.volumeDescription}
-                        </div>
-                      </div>
-                    </CarouselItem>
-                )
-              })}
-            </CarouselContent>
-
-            {/* Floating Controls */}
-            <CarouselPrevious className="absolute left-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
-            <CarouselNext className="absolute right-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
+            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
+            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
           </Carousel>
         </Card>
 
         {/* CARD 4: HIGHEST VOLUME STOCK */}
         <Card ref={card4Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-
           <CardHeader className="px-6 pt-0 pb-0">
             <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
               HIGHEST VOLUME STOCK
@@ -398,56 +328,14 @@ export function SectionCards() {
               plugins={[c4.plugin]}
               className="w-full flex-1 flex flex-col justify-between -mt-6"
           >
-            <CarouselContent className="-ml-0">
-              {highestVolumeStocks.map((stock) => {
-                const isPositive = stock.percentageChange >= 0
+            <CarouselBody isLoading={isLoadingVolume} stocks={highestVolumeStocks} />
 
-                return (
-                    <CarouselItem key={stock.id} className="pl-0">
-                      <div className="px-6 pt-1 pb-0">
-                    <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
-                      {stock.symbol}
-                    </span>
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
-                            ${stock.price.toFixed(2)}
-                          </h3>
-                          <Badge
-                              variant={isPositive ? "outline" : "destructive"}
-                              className="flex gap-1 items-center shrink-0"
-                          >
-                            <HugeiconsIcon
-                                icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                                strokeWidth={2}
-                                className="size-3.5"
-                            />
-                            {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Sliding Footer Content */}
-                      <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
-                        <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                          {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
-                          <HugeiconsIcon
-                              icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                              strokeWidth={2}
-                              className="size-4 shrink-0"
-                          />
-                        </div>
-                        <div className="text-muted-foreground line-clamp-1">
-                          {stock.volumeDescription}
-                        </div>
-                      </div>
-                    </CarouselItem>
-                )
-              })}
-            </CarouselContent>
-
-            {/* Floating Controls */}
-            <CarouselPrevious className="absolute left-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
-            <CarouselNext className="absolute right-2 top-[35%] size-7 opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-20" />
+            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
+            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
+              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
+            </div>
           </Carousel>
         </Card>
 

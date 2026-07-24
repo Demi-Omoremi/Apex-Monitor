@@ -4,6 +4,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner"
+import {AccentThemeProvider} from "@/hooks/use-accent-theme";
 const figtree = Figtree({subsets:['latin'],variable:'--font-sans'})
 
 const fontMono = Geist_Mono({
@@ -29,7 +30,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
       >
-        {children}
+        <AccentThemeProvider>{children}</AccentThemeProvider>
       </ThemeProvider>
         <Toaster position="top-center" />
       </body>

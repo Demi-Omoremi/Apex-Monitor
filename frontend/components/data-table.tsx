@@ -38,7 +38,7 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
 import { z } from "zod"
-import {NewsItem, newsSchema, schema, type StockRowData} from "./MarketTypes"
+import {AlertRule, alertRuleSchema, NewsItem, newsSchema, schema, type StockRowData} from "./MarketTypes"
 
 
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -95,7 +95,21 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { DragDropVerticalIcon, CheckmarkCircle01Icon, Loading03Icon, MoreVerticalCircle01Icon, LeftToRightListBulletIcon, ArrowDown01Icon, Add01Icon, ArrowLeftDoubleIcon, ArrowLeft01Icon, ArrowRight01Icon, ArrowRightDoubleIcon, ChartUpIcon } from "@hugeicons/core-free-icons"
+import {
+  DragDropVerticalIcon,
+  CheckmarkCircle01Icon,
+  Loading03Icon,
+  MoreVerticalCircle01Icon,
+  LeftToRightListBulletIcon,
+  ArrowDown01Icon,
+  Add01Icon,
+  ArrowLeftDoubleIcon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  ArrowRightDoubleIcon,
+  ChartUpIcon,
+  ArrowUp01Icon
+} from "@hugeicons/core-free-icons"
 
 
 function formatTimestamp(value: string): string {
@@ -109,6 +123,40 @@ function formatTimestamp(value: string): string {
   })
 }
 // Create a separate component for the drag handle
+
+function AlertRow({ item }: { item: AlertRule }) {
+  const isAbove = item.condition.includes("ABOVE")
+
+  return (
+      <div className="flex items-center justify-between rounded-lg border p-4 bg-card text-card-foreground shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+            <HugeiconsIcon
+                icon={isAbove ? ArrowUp01Icon : ArrowDown01Icon}
+                strokeWidth={2}
+                className={`size-5 ${isAbove ? "text-green-500" : "text-destructive"}`}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-lg leading-none">{item.symbol}</span>
+              <Badge variant={isAbove ? "outline" : "secondary"} className="text-[10px] uppercase tracking-wider">
+                {item.condition}
+              </Badge>
+            </div>
+            <span className="text-sm text-muted-foreground">
+            Target Price: <span className="font-medium text-foreground">${item.targetPrice.toFixed(2)}</span>
+          </span>
+          </div>
+        </div>
+
+        {/* Optional: Add an actions menu here for edit/delete later */}
+        <Button variant="ghost" size="icon" className="text-muted-foreground">
+          <HugeiconsIcon icon={MoreVerticalCircle01Icon} strokeWidth={2} />
+        </Button>
+      </div>
+  )
+}
 
 function NewsRow({ item }: { item: NewsItem }) {
   return (
@@ -346,8 +394,8 @@ const columns: ColumnDef<StockRowData>[] = [
           <span className="sr-only">Open menu</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
+          {/*<DropdownMenuItem>Edit</DropdownMenuItem>*/}
+          {/*<DropdownMenuItem>Make a copy</DropdownMenuItem>*/}
           <DropdownMenuItem>Favorite</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
@@ -379,7 +427,7 @@ function DraggableRow({ row }: { row: Row<StockRowData> }) {
     </TableRow>
   )
 }
-export function DataTable() {
+export function DataTable({ symbol }: { symbol: string }) {
   const [data, setData] = React.useState<StockRowData[]>([])
     const [isLoading, setIsLoading] = React.useState(true)
 
@@ -432,7 +480,7 @@ export function DataTable() {
       try {
         const [marketRes, companyRes] = await Promise.all([
           fetch("http://localhost:8080/api/streams/market/news"),
-          fetch("http://localhost:8080/api/streams/AAPL/news"),
+          fetch(`http://localhost:8080/api/streams/${symbol}/news`),
         ])
         if (!marketRes.ok || !companyRes.ok) {
           throw new Error("Failed to pull news")
@@ -452,9 +500,30 @@ export function DataTable() {
       }
     }
     loadNews()
+  }, [symbol])
+
+  const [alerts, setAlerts] = React.useState<AlertRule[]>([])
+  const [isAlertsLoading, setIsAlertsLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    async function loadAlerts() {
+      try {
+        // Adjust this URL to match your actual Java backend endpoint for alerts
+        const response = await fetch("http://localhost:8080/api/streams/alerts")
+        if (!response.ok) {
+          throw new Error("Failed to pull alerts")
+        }
+        const data = await response.json()
+        setAlerts(z.array(alertRuleSchema).parse(data))
+      } catch (error) {
+        console.error("Alerts sync failure:", error)
+        toast.error("Failed to sync alerts")
+      } finally {
+        setIsAlertsLoading(false)
+      }
+    }
+    loadAlerts()
   }, [])
-
-
 
   const sortableId = React.useId()
   const sensors = useSensors(
@@ -731,11 +800,20 @@ export function DataTable() {
           </div>
         </div>
       </TabsContent>
-      <TabsContent
-        value="alerts"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+      <TabsContent value="alerts" className="flex flex-col gap-3 px-4 lg:px-6">
+        {isAlertsLoading ? (
+            <div className="flex h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+              Syncing alert rules...
+            </div>
+        ) : alerts.length ? (
+            alerts.map((item) => <AlertRow key={item.id} item={item} />)
+        ) : (
+            <div className="flex h-24 items-center justify-center flex-col gap-2 rounded-lg border border-dashed text-sm text-muted-foreground">
+              <span>No active alerts found.</span>
+              <Button variant="outline" size="sm">Create Alert</Button>
+            </div>
+        )}
       </TabsContent>
       <TabsContent value="market-news" className="flex flex-col gap-3 px-4 lg:px-6">
         {isNewsLoading ? (
