@@ -9,6 +9,7 @@ import com.apex.monitor.model.TradingDay;
 import com.apex.monitor.service.AlpacaApiService;
 import com.apex.monitor.service.MarketCalendarService;
 import jakarta.annotation.PostConstruct;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class TickerTracker {
+    public static final int MAX_SUBSCRIPTIONS = 25;
+
     private final Map<String, MarketTick> subscriptions = new ConcurrentHashMap<>();
     private final List<String> popularSymbols = List.of("AAPL", "MSFT", "NVDA", "TSLA", "AMD");
     private final Set<String> subscriptionSymbols = new HashSet<>();
@@ -36,11 +39,12 @@ public class TickerTracker {
     private final AlpacaApiService alpacaApiService;
     private final MarketCalendarService marketCalendarService;
     ObjectMapper mapper = new ObjectMapper();
-    HttpClient client = HttpClient.newHttpClient();
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public TickerTracker(AlpacaConfig alpacaConfig, AlpacaApiService alpacaApiService, MarketCalendarService marketCalendarService) {
+    public TickerTracker(KafkaTemplate<String, Object> kafkaTemplate, AlpacaApiService alpacaApiService, MarketCalendarService marketCalendarService) {
         this.alpacaApiService = alpacaApiService;
         this.marketCalendarService = marketCalendarService;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     public List<MarketTick> getPopularList() {
@@ -57,6 +61,26 @@ public class TickerTracker {
         List<MarketTick> subs = new ArrayList<>();
         subs.addAll(subscriptions.values());
         return subs;
+    }
+
+    public int getSubscriptionCount() {
+        return subscriptions.size();
+    }
+
+    public int getMaxSubscriptions() {
+        return MAX_SUBSCRIPTIONS;
+    }
+
+    public boolean hasSubscriptionCapacity(String symbol) {
+        String clean = symbol.toUpperCase().trim();
+        if (subscriptions.containsKey(clean)) {
+            return true;
+        }
+        return subscriptions.size() < MAX_SUBSCRIPTIONS;
+    }
+
+    public MarketTick getSubscription(String symbol) {
+        return subscriptions.get(symbol.toUpperCase().trim());
     }
 
     public void updateSubscriptions(MarketTick tick) {
@@ -251,6 +275,7 @@ public class TickerTracker {
         }
 
         Double pctChange = getPercentageChange(symbol);
+        kafkaTemplate.send("market-ticks", symbol, lastTrade.toMarketTick(pctChange));
         return lastTrade.toMarketTick(pctChange);
 
 

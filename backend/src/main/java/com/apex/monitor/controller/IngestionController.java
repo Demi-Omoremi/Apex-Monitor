@@ -44,7 +44,7 @@ public class IngestionController {
 
     @GetMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter dashboardStream() {
-        return sseService.createConnection("dashboard");
+        return sseService.createConnection();
     }
 
 

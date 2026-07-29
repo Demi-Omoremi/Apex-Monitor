@@ -2,6 +2,7 @@ package com.apex.monitor.controller;
 
 
 import com.apex.monitor.enums.Timeframe;
+import com.apex.monitor.model.HistoricalBarsResponse;
 import com.apex.monitor.model.MarketBar;
 import com.apex.monitor.service.MarketDataService;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +24,8 @@ public class GraphController {
 
 
     @GetMapping("/{symbol}/historical-bars")
-    public ResponseEntity<List<MarketBar>> getMarketData(@PathVariable String symbol, @RequestParam Timeframe tf) {
-        List<MarketBar> marketBarList = marketDataService.getHistoricalMarketData(symbol, tf);
-        return ResponseEntity.ok(marketBarList);
+    public ResponseEntity<HistoricalBarsResponse> getMarketData(@PathVariable String symbol, @RequestParam Timeframe tf) {
+        HistoricalBarsResponse response = marketDataService.getHistoricalMarketData(symbol, tf);
+        return ResponseEntity.ok(response);
     }
 }

@@ -37,6 +37,7 @@ public class IngestionService extends TextWebSocketHandler {
     private final AlertRegistry alertRegistry;
     private final AlertRuleRepository alertRuleRepository;
     private final TickerTracker tickerTracker;
+    private final SseService sseService;
 
     private final Set<String> activeSubscriptions = ConcurrentHashMap.newKeySet();
     private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA", "FAKEPACA");
@@ -44,7 +45,7 @@ public class IngestionService extends TextWebSocketHandler {
 
     public IngestionService(AlpacaAPI alpacaAPI, AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
                             KafkaTemplate<String, Object> kafkaTemplate, AlertRuleRepository alertRuleRepository,
-                            AlertRegistry alertRegistry, TickerTracker tickerTracker) {
+                            AlertRegistry alertRegistry, TickerTracker tickerTracker, SseService sseService) {
         this.alpacaAPI = alpacaAPI;
         this.alpacaConfig = alpacaConfig;
         this.objectMapper = objectMapper;
@@ -52,6 +53,7 @@ public class IngestionService extends TextWebSocketHandler {
         this.alertRegistry = alertRegistry;
         this.alertRuleRepository = alertRuleRepository;
         this.tickerTracker = tickerTracker;
+        this.sseService = sseService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -150,12 +152,16 @@ public class IngestionService extends TextWebSocketHandler {
     }
 
 
-    public boolean subscribeToStock(String symbol) {
+    public SubscribeResult subscribeToStock(String symbol) {
         String cleanSymbol = symbol.toUpperCase().trim();
 
-        if (tickerTracker.isActiveSubscription(cleanSymbol)) {
-            System.out.println("Already streaming data for " + cleanSymbol + ". Skipped redundant subscription.");
-            return false;
+        MarketTick existing = tickerTracker.getSubscription(cleanSymbol);
+        if (existing != null) {
+            return SubscribeResult.alreadySubscribed(existing);
+        }
+
+        if (!tickerTracker.hasSubscriptionCapacity(cleanSymbol)) {
+            return SubscribeResult.limitReached(TickerTracker.MAX_SUBSCRIPTIONS);
         }
 
         if (currentSession != null && currentSession.isOpen()) {
@@ -163,21 +169,17 @@ public class IngestionService extends TextWebSocketHandler {
                 String subJson = String.format("{\"action\": \"subscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
                 currentSession.sendMessage(new TextMessage(subJson));
                 MarketTick marketTick = tickerTracker.initMarketTick(cleanSymbol);
-                if (marketTick != null) {
-                    tickerTracker.addSubscription(marketTick);
-                    System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
-
-                    return true;
-                } else {
-                    System.err.println("Could not initialize market tick data for symbol: " + cleanSymbol + "(unsupported or test ticker).");
-                }
-
+                tickerTracker.addSubscription(marketTick);
+                System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
+                sseService.broadcast("subscription-added", marketTick);
+                return SubscribeResult.subscribed(marketTick);
             } catch (Exception e) {
                 System.err.println("Failed to send dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
+                return SubscribeResult.failed(cleanSymbol, e.getMessage());
             }
         }
 
-        return false;
+        return SubscribeResult.failed(cleanSymbol, "Market stream is not connected yet");
     }
 
     public boolean unsubscribeFromStock(String symbol) {

@@ -1,11 +1,11 @@
 import { Geist, Geist_Mono, Figtree } from "next/font/google"
 
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/sonner"
-import {AccentThemeProvider} from "@/hooks/use-accent-theme";
-const figtree = Figtree({subsets:['latin'],variable:'--font-sans'})
+import { SseProvider } from "@/components/SseContext"
+
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" })
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -21,17 +21,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", figtree.variable)}
+      className={cn("dark antialiased", fontMono.variable, "font-sans", figtree.variable)}
     >
       <body suppressHydrationWarning>
-      <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-      >
-        <AccentThemeProvider>{children}</AccentThemeProvider>
-      </ThemeProvider>
+        <SseProvider>{children}</SseProvider>
         <Toaster position="top-center" />
       </body>
     </html>

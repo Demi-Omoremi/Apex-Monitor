@@ -16,15 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Field, FieldGroup } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { toast } from "sonner"
 
 import {
@@ -37,6 +29,18 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 import { PlusSignCircleIcon } from "@hugeicons/core-free-icons"
 import { SymbolCombobox, type Asset } from "@/components/nav-symbols" // ← adjust path if yours differs
+import { CreateAlertDialog } from "@/components/create-alert-dialog" // ← adjust path if yours differs
+
+/**
+ * Restyled to match the Apex Monitor identity established in app/page.tsx —
+ * a fixed, bespoke palette, intentionally outside the app's accent-theme system:
+ *   #0C0B09  void   — background
+ *   #C79A4B  brass  — hairlines, labels, the one accent
+ *   #EDE6D8  bone   — primary text
+ *   #8B8478  fog    — secondary text
+ *   #6E8F71  moss   — price up
+ *   #A85D45  rust   — price down
+ */
 
 export function NavMain({
                           items,
@@ -49,10 +53,6 @@ export function NavMain({
     badge?: string
   }[]
 }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
-
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
   const [subscribeAsset, setSubscribeAsset] = useState<Asset | null>(null)
@@ -75,58 +75,6 @@ export function NavMain({
     }
   }
 
-  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
-    if (!selectedAsset) {
-      toast.error("Pick a symbol from the search results first.")
-      return
-    }
-
-    setIsSubmitting(true)
-
-    const formData = new FormData(e.currentTarget)
-
-    const alertData = {
-      symbol: selectedAsset.symbol,
-      condition: formData.get("alertCondition"),
-      targetPrice: formData.get("alertThreshold"),
-    }
-
-    console.log("Activating Stream Monitor Alert:", alertData)
-
-    const alertRequestPromise = fetch("http://localhost:8080/api/alerts", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(alertData),
-    }).then(async (response) => {
-      if (!response.ok) {
-        throw new Error("Server error code received")
-      }
-      return response.json()
-    })
-
-    try {
-      await toast.promise(alertRequestPromise, {
-        loading: `Creating Live Data Alert for ${alertData.symbol}...`,
-        success: (data) => {
-          setIsOpen(false)
-          setSelectedAsset(null)
-          return `Success: Activated tracking for ${alertData.symbol}!`
-        },
-        error: (err) => {
-          return `Failed to Create Alert for ${alertData.symbol}.`
-        },
-      })
-    } catch (error) {
-      console.error("Intercepted request breakdown:", error)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   const handleSubscribeSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
@@ -142,19 +90,20 @@ export function NavMain({
     }
 
     const subscribeRequestPromise = fetch(
-        "http://localhost:8080/api/streams/subscription",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(subscriptionData),
-        }
+        `http://localhost:8080/api/streams/subscribe?symbol=${encodeURIComponent(subscriptionData.symbol)}`,
+        { method: "POST" }
     ).then(async (response) => {
-      if (!response.ok) {
-        throw new Error("Server error code received")
+      const text = await response.text()
+      let body: { message?: string } = {}
+      try {
+        body = JSON.parse(text) as { message?: string }
+      } catch {
+        body = { message: text }
       }
-      return response.json()
+      if (!response.ok) {
+        throw new Error(body.message || "Server error code received")
+      }
+      return body
     })
 
     try {
@@ -163,14 +112,12 @@ export function NavMain({
         success: () => {
           setIsSubscribeOpen(false)
           setSubscribeAsset(null)
-          // DataTable fetches its subscriptions client-side on mount with no
-          // shared state — reload so "My Stocks" picks up the new symbol.
-          window.location.reload()
           return `Now tracking ${subscriptionData.symbol}.`
         },
-        error: () => {
-          return `Failed to subscribe to ${subscriptionData.symbol}.`
-        },
+        error: (err) =>
+          err instanceof Error
+            ? err.message
+            : `Failed to subscribe to ${subscriptionData.symbol}.`,
       })
     } catch (error) {
       console.error("Subscription request failed:", error)
@@ -184,84 +131,20 @@ export function NavMain({
         <SidebarGroupContent className="flex flex-col gap-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <Dialog
-                  open={isOpen}
-                  onOpenChange={(next) => {
-                    setIsOpen(next)
-                    if (!next) setSelectedAsset(null)
-                  }}
-              >
-                <DialogTrigger
-                    render={
-                      <SidebarMenuButton
-                          tooltip="Quick Create"
-                          className="w-full"
-                      />
-                    }
-                >
-                  <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} />
-                  <span>Create Alert</span>
-                </DialogTrigger>
-
-                <DialogContent className="sm:max-w-md">
-                  <form onSubmit={handleFormSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Create Live Data Alert</DialogTitle>
-                      <DialogDescription>
-                        Set up an automated monitoring rule. You will be notified instantly when thresholds are breached.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <FieldGroup className="grid gap-4 py-5">
-                      <Field className="grid gap-1.5">
-                        <Label htmlFor="alertTicker" className="text-xs font-medium text-muted-foreground">
-                          Symbol / Ticker
-                        </Label>
-                        <SymbolCombobox onSelect={(asset) => setSelectedAsset(asset)} />
-                      </Field>
-
-                      <Field className="grid gap-1.5">
-                        <Label htmlFor="alertCondition" className="text-xs font-medium text-muted-foreground">
-                          Condition Logic
-                        </Label>
-                        <Select name="alertCondition" defaultValue="Above">
-                          <SelectTrigger id="alertCondition" className="h-9 w-full text-left">
-                            <SelectValue placeholder="Select logic parameters" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Above">Goes Above (&gt;=)</SelectItem>
-                            <SelectItem value="Below">Drops Below (&lt;=)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-
-                      <Field className="grid gap-1.5">
-                        <Label htmlFor="alertThreshold" className="text-xs font-medium text-muted-foreground">
-                          Target Threshold Value
-                        </Label>
-                        <Input
-                            id="alertThreshold"
-                            name="alertThreshold"
-                            type="number"
-                            step="any"
-                            placeholder="0.00"
-                            required
-                            className="h-9"
-                        />
-                      </Field>
-                    </FieldGroup>
-
-                    <DialogFooter className="gap-2 sm:gap-0">
-                      <DialogClose render={<Button variant="outline" type="button" />}>
-                        Cancel
-                      </DialogClose>
-                      <Button type="submit" disabled={!selectedAsset || isSubmitting}>
-                        Create Alert
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <CreateAlertDialog
+                  triggerRender={
+                    <SidebarMenuButton
+                        tooltip="Quick Create"
+                        className="w-full font-mono text-xs uppercase tracking-wide text-[#C79A4B] hover:bg-[#C79A4B]/10 hover:text-[#C79A4B]"
+                    />
+                  }
+                  triggerContent={
+                    <>
+                      <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} />
+                      <span>Create Alert</span>
+                    </>
+                  }
+              />
             </SidebarMenuItem>
 
             <SidebarMenuItem>
@@ -272,23 +155,35 @@ export function NavMain({
                     if (!next) setSubscribeAsset(null)
                   }}
               >
-                <DialogTrigger render={<SidebarMenuButton tooltip="Add Subscription" className="w-full" />}>
+                <DialogTrigger
+                    render={
+                      <SidebarMenuButton
+                          tooltip="Add Subscription"
+                          className="w-full font-mono text-xs uppercase tracking-wide text-[#C79A4B] hover:bg-[#C79A4B]/10 hover:text-[#C79A4B]"
+                      />
+                    }
+                >
                   <HugeiconsIcon icon={PlusSignCircleIcon} strokeWidth={2} />
                   <span>Add Subscription</span>
                 </DialogTrigger>
 
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="border-[#C79A4B]/20 bg-[#0C0B09] text-[#EDE6D8] sm:max-w-md">
                   <form onSubmit={handleSubscribeSubmit}>
                     <DialogHeader>
-                      <DialogTitle>Add Subscription</DialogTitle>
-                      <DialogDescription>
+                      <DialogTitle className="font-mono uppercase tracking-widest text-[#C79A4B]">
+                        Add Subscription
+                      </DialogTitle>
+                      <DialogDescription className="text-[#8B8478]">
                         Start streaming live data for a new symbol. It&#39;ll appear in My Stocks once subscribed.
                       </DialogDescription>
                     </DialogHeader>
 
                     <FieldGroup className="grid gap-4 py-5">
                       <Field className="grid gap-1.5">
-                        <Label htmlFor="subscriptionTicker" className="text-xs font-medium text-muted-foreground">
+                        <Label
+                            htmlFor="subscriptionTicker"
+                            className="font-mono text-[11px] uppercase tracking-wider text-[#8B8478]"
+                        >
                           Symbol / Ticker
                         </Label>
                         <SymbolCombobox onSelect={(asset) => setSubscribeAsset(asset)} />
@@ -296,10 +191,22 @@ export function NavMain({
                     </FieldGroup>
 
                     <DialogFooter className="gap-2 sm:gap-0">
-                      <DialogClose render={<Button variant="outline" type="button" />}>
+                      <DialogClose
+                          render={
+                            <Button
+                                variant="outline"
+                                type="button"
+                                className="rounded-sm border-[#C79A4B]/20 text-[#8B8478] hover:bg-[#C79A4B]/10 hover:text-[#EDE6D8]"
+                            />
+                          }
+                      >
                         Cancel
                       </DialogClose>
-                      <Button type="submit" disabled={!subscribeAsset || isSubscribing}>
+                      <Button
+                          type="submit"
+                          disabled={!subscribeAsset || isSubscribing}
+                          className="rounded-sm bg-[#C79A4B] text-[#0C0B09] hover:bg-[#C79A4B]/90 disabled:opacity-40"
+                      >
                         Subscribe
                       </Button>
                     </DialogFooter>
@@ -310,35 +217,43 @@ export function NavMain({
           </SidebarMenu>
 
           <SidebarMenu>
-            {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                      tooltip={item.title}
-                      aria-disabled={item.disabled}
-                      className={
-                        item.disabled ? "pointer-events-none opacity-50" : undefined
-                      }
-                      render={
-                        item.disabled ? (
-                            <span />
-                        ) : (
-                            <a href={item.url} onClick={(e) => handleNavClick(e, item)} />
-                        )
-                      }
-                  >
-                    {item.icon}
-                    <span>{item.title}</span>
-                    {item.badge && (
-                        <Badge
-                            variant="secondary"
-                            className="ml-auto px-1.5 py-0 text-[10px] font-normal"
-                        >
-                          {item.badge}
-                        </Badge>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-            ))}
+            {items.map((item) => {
+              const isActive = pathname === item.url
+              return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                        tooltip={item.title}
+                        aria-disabled={item.disabled}
+                        aria-current={isActive ? "page" : undefined}
+                        className={
+                          item.disabled
+                              ? "pointer-events-none font-mono text-xs uppercase tracking-wide text-[#8B8478] opacity-40"
+                              : `font-mono text-xs uppercase tracking-wide hover:bg-[#C79A4B]/10 hover:text-[#C79A4B] ${
+                                  isActive ? "text-[#C79A4B]" : "text-[#8B8478]"
+                              }`
+                        }
+                        render={
+                          item.disabled ? (
+                              <span />
+                          ) : (
+                              <a href={item.url} onClick={(e) => handleNavClick(e, item)} />
+                          )
+                        }
+                    >
+                      {item.icon}
+                      <span>{item.title}</span>
+                      {item.badge && (
+                          <Badge
+                              variant="secondary"
+                              className="ml-auto rounded-sm border border-[#C79A4B]/20 bg-transparent px-1.5 py-0 font-mono text-[10px] font-normal text-[#C79A4B]"
+                          >
+                            {item.badge}
+                          </Badge>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+              )
+            })}
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>

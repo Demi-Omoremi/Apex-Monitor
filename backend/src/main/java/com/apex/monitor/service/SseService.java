@@ -1,64 +1,60 @@
 package com.apex.monitor.service;
 
-
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class SseService {
 
-    private final Map<String, List<SseEmitter>> channels = new ConcurrentHashMap<>();
+    private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final JsonMapper jsonMapper;
 
-    public SseEmitter createConnection(String channel) {
+    public SseService(JsonMapper jsonMapper) {
+        this.jsonMapper = jsonMapper;
+    }
+
+    public SseEmitter createConnection() {
         SseEmitter emitter = new SseEmitter(0L);
+        emitters.add(emitter);
 
-
-        channels.computeIfAbsent(channel, k -> new CopyOnWriteArrayList<>()).add(emitter);
-
-        emitter.onCompletion(() -> removeEmitter(channel, emitter));
-        emitter.onTimeout(() -> removeEmitter(channel, emitter));
-        emitter.onError((e) -> removeEmitter(channel, emitter));
+        emitter.onCompletion(() -> emitters.remove(emitter));
+        emitter.onTimeout(() -> emitters.remove(emitter));
+        emitter.onError((e) -> emitters.remove(emitter));
 
         try {
             emitter.send(SseEmitter.event().name("INIT").data("Connected to Apex Monitor Stream"));
         } catch (IOException e) {
-            removeEmitter(channel, emitter);
+            emitters.remove(emitter);
         }
 
         return emitter;
     }
 
+    public void broadcast(String eventName, Object data) {
+        if (emitters.isEmpty()) return;
 
-    public void broadcast(String channel, String eventName, Object data) {
-        List<SseEmitter> emitters = channels.get(channel);
+        final String payload;
+        try {
+            payload = jsonMapper.writeValueAsString(data);
+        } catch (JacksonException e) {
+            System.err.println("Failed to serialize SSE payload for " + eventName + ": " + e.getMessage());
+            return;
+        }
+
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
-
-        for (SseEmitter emitter: emitters) {
+        for (SseEmitter emitter : emitters) {
             try {
-                emitter.send(SseEmitter.event().name(eventName).data(data));
+                emitter.send(SseEmitter.event().name(eventName).data(payload));
             } catch (IOException e) {
                 deadEmitters.add(emitter);
             }
         }
-
         emitters.removeAll(deadEmitters);
-    }
-
-
-    private void removeEmitter(String channel, SseEmitter emitter) {
-        List<SseEmitter> emitters = channels.get(channel);
-        if (emitters != null) {
-            emitters.remove(emitter);
-            // Clean up empty channels to save memory
-            if (emitters.isEmpty()) {
-                channels.remove(channel);
-            }
-        }
     }
 }

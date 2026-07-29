@@ -143,5 +143,13 @@ public class MarketCalendarService {
                 .orElseThrow(() -> new IllegalStateException("No prior trading day found near " + today));
     }
 
+    public LocalDate getPreviousTradingDay(LocalDate date) {
+        ensureCached(date.minusDays(10), date.plusDays(1));
+        return calendarCache.keySet().stream()
+                .filter(d -> d.isBefore(date))
+                .max(Comparator.naturalOrder())
+                .orElseThrow(() -> new IllegalStateException("No prior trading day found before " + date));
+    }
+
 
 }

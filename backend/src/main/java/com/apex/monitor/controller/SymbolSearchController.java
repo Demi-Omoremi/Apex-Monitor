@@ -2,6 +2,7 @@ package com.apex.monitor.controller;
 
 import com.apex.monitor.model.Asset;
 import com.apex.monitor.repository.AssetRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,6 +29,6 @@ public class SymbolSearchController {
 
         String clean = query.trim();
 
-        return assetRepository.findTop10BySymbolStartingWithIgnoreCaseOrNameContainingIgnoreCase(clean, clean);
+        return assetRepository.searchAssets(clean, PageRequest.of(0, 10));
     }
 }

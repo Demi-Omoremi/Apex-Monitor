@@ -4,7 +4,10 @@ package com.apex.monitor.service;
 import com.apex.monitor.config.AlpacaConfig;
 import com.apex.monitor.dto.StockItem;
 import com.apex.monitor.enums.Timeframe;
+import com.apex.monitor.model.HistoricalBarsResponse;
+import com.apex.monitor.model.LatestTradeResponse;
 import com.apex.monitor.model.MarketBar;
+import com.apex.monitor.model.TradingDay;
 import com.apex.monitor.registry.TickerTracker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,10 +20,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,9 +31,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 public class MarketDataService {
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
-    private final AlpacaConfig alpacaConfig;
-    private final Map<String, Map<Timeframe, List<MarketBar>>> graphCache = new ConcurrentHashMap<>();
+
     private final TickerTracker tickerTracker;
     private final AlpacaApiService alpacaApiService;
     private final MapperBuilder mapperBuilder;
@@ -48,9 +46,8 @@ public class MarketDataService {
     private static final LocalTime MARKET_CLOSE = LocalTime.of(16, 0);
 
 
-    public MarketDataService(AlpacaConfig alpacaConfig, TickerTracker tickerTracker, MapperBuilder mapperBuilder,
+    public MarketDataService(TickerTracker tickerTracker, MapperBuilder mapperBuilder,
         MarketCalendarService marketCalendarService, AlpacaApiService alpacaApiService) {
-        this.alpacaConfig = alpacaConfig;
         this.tickerTracker = tickerTracker;
         this.mapperBuilder = mapperBuilder;
         this.marketCalendarService = marketCalendarService;
@@ -59,26 +56,36 @@ public class MarketDataService {
 
 
 
-    public List<MarketBar> getHistoricalMarketData(String symbol, Timeframe timeframe) {
-        String clean = symbol.toUpperCase().trim();
+    private record CachedBars(HistoricalBarsResponse response, Instant fetchedAt) {}
+    private final Map<String, Map<Timeframe, CachedBars>> graphCache = new ConcurrentHashMap<>();
+    private static final Duration INTRADAY_TODAY_TTL = Duration.ofMinutes(5); // matches your instinct
 
+    public HistoricalBarsResponse getHistoricalMarketData(String symbol, Timeframe timeframe) {
+        String clean = symbol.toUpperCase().trim();
         graphCache.computeIfAbsent(clean, k -> new ConcurrentHashMap<>());
 
-        if (graphCache.get(clean).containsKey(timeframe)) {
-            return graphCache.get(clean).get(timeframe);
+        LocalDate today = marketCalendarService.getMostRecentTradingDay(ZonedDateTime.now(MarketCalendarService.MARKET_ZONE));
+        CachedBars cached = graphCache.get(clean).get(timeframe);
+
+        if (cached != null) {
+            LocalDate lastBarDate = cached.response().bars().isEmpty()
+                    ? null
+                    : cached.response().bars().get(cached.response().bars().size() - 1)
+                    .timestamp().atZone(MarketCalendarService.MARKET_ZONE).toLocalDate();
+
+            boolean windowIsBehind = lastBarDate != null && lastBarDate.isBefore(today);
+            boolean cacheCoversToday = lastBarDate != null && lastBarDate.equals(today);
+
+            if (!windowIsBehind) {
+                boolean stillFresh = !cacheCoversToday
+                        || Duration.between(cached.fetchedAt(), Instant.now()).compareTo(INTRADAY_TODAY_TTL) < 0;
+                if (stillFresh) {
+                    return cached.response();
+                }
+            }
         }
 
         LocalDate start = marketCalendarService.getStartDate(timeframe);
-        System.out.println("Timeframe: " + timeframe + " days=" + start + " -> start=" + start);
-        System.out.println("NOW IN NY: " + ZonedDateTime.now(MARKET_ZONE));
-//            HttpRequest request = HttpRequest.newBuilder()
-//                    .uri(URI.create("https://data.alpaca.markets/v2/stocks/"+clean+"/bars?timeframe="+timeframe.barSize+"&start="+start.toString()+"&limit=1000&adjustment=raw&feed=sip&sort=asc"))
-//                    .header("accept", "application/json")
-//                    .header("APCA-API-KEY-ID", alpacaConfig.getKeyId())
-//                    .header("APCA-API-SECRET-KEY", alpacaConfig.getSecretKey())
-//                    .method("GET", HttpRequest.BodyPublishers.noBody())
-//                    .build();
-//            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         JsonNode root = alpacaApiService.get("https://data.alpaca.markets/v2/stocks/"+clean+"/bars?timeframe="+timeframe.barSize+"&start="+start.toString()+"&limit=1000&adjustment=raw&feed=sip&sort=asc");
 
         List<MarketBar> histBar = objectMapper.convertValue(
@@ -86,12 +93,62 @@ public class MarketDataService {
                 objectMapper.getTypeFactory().constructCollectionType(List.class, MarketBar.class)
         );
         marketCalendarService.preloadForBars(histBar);
+
+        Double previousClose = null;
+
         if (timeframe.isIntraday()) {
             histBar.removeIf(bar -> !marketCalendarService.isMarketHours(bar));
+
+            if (!histBar.isEmpty()) {
+                LocalDate actualWindowStart = histBar.get(0).timestamp()
+                        .atZone(MarketCalendarService.MARKET_ZONE)
+                        .toLocalDate();
+
+                LocalDate priorTradingDay = marketCalendarService.getPreviousTradingDay(actualWindowStart);
+                TradingDay priorSession = marketCalendarService.getTradingDay(priorTradingDay);
+
+                JsonNode priorTradeNode = alpacaApiService.getLastTradeBeforeClose(clean, priorTradingDay, priorSession);
+                LatestTradeResponse priorTrade = objectMapper.convertValue(priorTradeNode, LatestTradeResponse.class);
+                previousClose = priorTrade.trades().getFirst().p();
+            }
         }
 
-        graphCache.get(clean).put(timeframe, histBar);
-        return histBar;
+        // Correct the most recent bar's close with the verified official-close print.
+        // Alpaca's bars endpoint has no "regular session only" option, so its raw
+        // `close` can be contaminated by after-hours trades the same way a naive
+        // "last trade" lookup was — this reuses the same M/6-tagged verification
+        // logic already proven correct for AAPL.
+        if (!histBar.isEmpty()) {
+            MarketBar lastBar = histBar.get(histBar.size() - 1);
+            LocalDate lastBarDate = lastBar.timestamp()
+                    .atZone(MarketCalendarService.MARKET_ZONE)
+                    .toLocalDate();
+
+            try {
+                TradingDay lastSession = marketCalendarService.getTradingDay(lastBarDate);
+                JsonNode verifiedNode = alpacaApiService.getLastTradeBeforeClose(clean, lastBarDate, lastSession);
+                LatestTradeResponse verifiedTrade = objectMapper.convertValue(verifiedNode, LatestTradeResponse.class);
+                double verifiedClose = verifiedTrade.trades().getFirst().p();
+
+                histBar.set(histBar.size() - 1, new MarketBar(
+                        lastBar.symbol(),
+                        verifiedClose,
+                        lastBar.high(),
+                        lastBar.low(),
+                        lastBar.tradeCount(),
+                        lastBar.open(),
+                        lastBar.timestamp(),
+                        lastBar.volume(),
+                        lastBar.vwap()
+                ));
+            } catch (Exception e) {
+                log.warn("Could not verify official close for {} on {} — using raw bar close", clean, lastBarDate, e);
+            }
+        }
+
+        HistoricalBarsResponse response = new HistoricalBarsResponse(histBar, previousClose);
+        graphCache.get(clean).put(timeframe, new CachedBars(response, Instant.now()));
+        return response;
     }
 
     public List<StockItem> getMostActive() {

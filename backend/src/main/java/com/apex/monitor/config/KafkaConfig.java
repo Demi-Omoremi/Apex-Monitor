@@ -94,6 +94,8 @@ public class KafkaConfig {
                 .build();
 
         JacksonJsonDeserializer<TriggeredAlert> deserializer = new JacksonJsonDeserializer<>(TriggeredAlert.class, jsonMapper);
+        deserializer.addTrustedPackages("com.apex.monitor.model");
+        deserializer.setUseTypeHeaders(false);
 
         return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), deserializer);
     }

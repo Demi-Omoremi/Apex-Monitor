@@ -4,28 +4,60 @@ import * as React from "react"
 import { Badge } from "@/components/ui/badge"
 import Autoplay from "embla-carousel-autoplay"
 import {
-  Carousel, CarouselApi,
+  Carousel,
+  CarouselApi,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel"
-import {
-  Card,
-  CardAction,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardHeader } from "@/components/ui/card"
 import { HugeiconsIcon } from "@hugeicons/react"
-import {ChartUpIcon, ChartDownIcon, Loading03Icon} from "@hugeicons/core-free-icons"
-import {MarketTick, StockItem} from "@/components/MarketTypes";
-import {toast} from "sonner";
-import { Skeleton } from "@/components/ui/skeleton"
+import { ChartUpIcon, ChartDownIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { StockItem } from "@/components/MarketTypes"
+import { toast } from "sonner"
 
+// ---------------------------------------------------------------------------
+// Trend classification
+//
+// Treats near-zero moves as "flat" rather than false-positive "up" (the old
+// `percentageChange >= 0` check meant an exact 0.00% stock showed as
+// "Trending up"). Also treats missing/malformed data as its own state so a
+// bad SSE tick or a not-yet-loaded symbol renders "—" instead of crashing
+// on `.toFixed(2)` or showing misleading copy.
+// ---------------------------------------------------------------------------
 
+type Trend = "up" | "down" | "flat" | "unknown"
 
+const FLAT_THRESHOLD = 0.005 // percent; anything tighter than this reads as "flat," not a real move
+
+function getTrend(percentageChange: number | null | undefined): Trend {
+  if (percentageChange == null || Number.isNaN(percentageChange)) return "unknown"
+  if (percentageChange > FLAT_THRESHOLD) return "up"
+  if (percentageChange < -FLAT_THRESHOLD) return "down"
+  return "flat"
+}
+
+const TREND_COPY: Record<Trend, string> = {
+  up: "Pushing higher",
+  down: "Losing ground",
+  flat: "Holding steady",
+  unknown: "Awaiting data",
+}
+
+const TREND_TEXT_COLOR: Record<Trend, string> = {
+  up: "text-[#6E8F71]",
+  down: "text-[#A85D45]",
+  flat: "text-[#8B8478]",
+  unknown: "text-[#8B8478]",
+}
+
+const TREND_BADGE_CLASS: Record<Trend, string> = {
+  up: "border-[#6E8F71]/30 bg-[#6E8F71]/10 text-[#6E8F71]",
+  down: "border-[#A85D45]/30 bg-[#A85D45]/10 text-[#A85D45]",
+  flat: "border-[#C79A4B]/20 bg-transparent text-[#8B8478]",
+  unknown: "border-[#C79A4B]/20 bg-transparent text-[#8B8478]",
+}
 
 async function fetchStockList(
     url: string,
@@ -42,7 +74,7 @@ async function fetchStockList(
         .map((item, index) => ({
           ...item,
           id: index + 1,
-          volumeDescription: item.volumeDescription ?? ""
+          volumeDescription: item.volumeDescription ?? "",
         }))
 
     setter(mapped)
@@ -55,7 +87,6 @@ async function fetchStockList(
     setLoading(false)
   }
 }
-
 
 function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElement | null>, hasData: boolean) {
   const [api, setApi] = React.useState<CarouselApi>()
@@ -93,7 +124,6 @@ function useCarouselAutoplay(delay: number, cardRef: React.RefObject<HTMLDivElem
   return { api, setApi, plugin, cardRef }
 }
 
-// Small helper so we don't repeat the skeleton/empty/content branch 4x
 function CarouselBody({
                         isLoading,
                         stocks,
@@ -105,8 +135,8 @@ function CarouselBody({
     return (
         <CarouselContent className="-ml-0">
           <CarouselItem className="pl-0">
-            <div className="flex h-[104px] w-full items-center justify-center gap-2 px-6 text-sm text-muted-foreground">
-              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+            <div className="flex h-[104px] w-full items-center justify-center gap-2 px-6 font-mono text-xs uppercase tracking-wider text-[#8B8478]">
+              <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin text-[#C79A4B]" />
               Syncing live streams...
             </div>
           </CarouselItem>
@@ -116,54 +146,60 @@ function CarouselBody({
 
   if (stocks.length === 0) {
     return (
-        <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center py-12 font-mono text-xs uppercase tracking-wider text-[#8B8478]">
           Failed to load stocks.
         </div>
     )
   }
 
-
   return (
       <CarouselContent className="-ml-0">
         {stocks.map((stock) => {
-          const isPositive = stock.percentageChange >= 0
+          const trend = getTrend(stock.percentageChange)
+          const hasPrice = typeof stock.price === "number" && Number.isFinite(stock.price)
+          const hasChange = trend !== "unknown"
+          const showTrendIcon = trend === "up" || trend === "down"
 
           return (
               <CarouselItem key={stock.id} className="pl-0">
                 <div className="px-6 pt-1 pb-0">
-                  <span className="text-xs font-bold text-muted-foreground/70 tracking-wider block mb-0.5">
-                    {stock.symbol}
-                  </span>
+              <span className="mb-0.5 block font-mono text-[11px] font-semibold tracking-[0.25em] text-[#C79A4B]">
+                {stock.symbol}
+              </span>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-2xl font-semibold tracking-tight tabular-nums @[250px]/card:text-3xl">
-                      ${stock.price.toFixed(2)}
+                    <h3 className="text-2xl font-semibold tracking-tight text-[#EDE6D8] tabular-nums @[250px]/card:text-3xl">
+                      {hasPrice ? `$${stock.price.toFixed(2)}` : "—"}
                     </h3>
                     <Badge
-                        variant={isPositive ? "outline" : "destructive"}
-                        className="flex gap-1 items-center shrink-0"
+                        variant="outline"
+                        className={`flex shrink-0 items-center gap-1 rounded-sm border font-mono text-xs ${TREND_BADGE_CLASS[trend]}`}
                     >
-                      <HugeiconsIcon
-                          icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                          strokeWidth={2}
-                          className="size-3.5"
-                      />
-                      {isPositive ? "+" : ""}{stock.percentageChange.toFixed(2)}%
+                      {showTrendIcon && (
+                          <HugeiconsIcon
+                              icon={trend === "up" ? ChartUpIcon : ChartDownIcon}
+                              strokeWidth={2}
+                              className="size-3.5"
+                          />
+                      )}
+                      {hasChange
+                          ? `${trend === "up" ? "+" : ""}${stock.percentageChange.toFixed(2)}%`
+                          : "—"}
                     </Badge>
                   </div>
                 </div>
 
-                <div className="px-6 pt-4 pb-6 flex flex-col gap-1.5 text-sm mt-auto">
-                  <div className="line-clamp-1 flex gap-2 font-medium items-center">
-                    {isPositive ? "Trending up this period" : "Downside movement detected"}{" "}
-                    <HugeiconsIcon
-                        icon={isPositive ? ChartUpIcon : ChartDownIcon}
-                        strokeWidth={2}
-                        className="size-4 shrink-0"
-                    />
+                <div className="mt-auto flex flex-col gap-1.5 px-6 pt-4 pb-6 text-sm">
+                  <div className={`line-clamp-1 flex items-center gap-2 font-medium ${TREND_TEXT_COLOR[trend]}`}>
+                    {TREND_COPY[trend]}
+                    {showTrendIcon && (
+                        <HugeiconsIcon
+                            icon={trend === "up" ? ChartUpIcon : ChartDownIcon}
+                            strokeWidth={2}
+                            className="size-4 shrink-0"
+                        />
+                    )}
                   </div>
-                  <div className="text-muted-foreground line-clamp-1">
-                    {stock.volumeDescription}
-                  </div>
+                  <div className="line-clamp-1 text-[#8B8478]">{stock.volumeDescription}</div>
                 </div>
               </CarouselItem>
           )
@@ -172,32 +208,62 @@ function CarouselBody({
   )
 }
 
+const CAROUSEL_NAV =
+    "relative left-0 top-0 size-7 translate-y-0 rounded-sm border-[#C79A4B]/20 bg-[#0C0B09] text-[#8B8478] hover:bg-[#C79A4B]/10 hover:text-[#C79A4B]"
+
+function MarketCarousel({
+                          title,
+                          isLoading,
+                          stocks,
+                          delay,
+                        }: {
+  title: string
+  isLoading: boolean
+  stocks: StockItem[]
+  delay: number
+}) {
+  const cardRef = React.useRef<HTMLDivElement>(null)
+  const carousel = useCarouselAutoplay(delay, cardRef, stocks.length > 0)
+
+  return (
+      <Card
+          ref={cardRef}
+          className="@container/card group relative flex max-w-sm flex-col justify-between overflow-hidden rounded-sm border-[#C79A4B]/15 bg-[#0C0B09] text-[#EDE6D8] shadow-none"
+      >
+        <CardHeader className="px-6 pt-0 pb-0">
+          <h2 className="font-mono text-[11px] font-semibold tracking-[0.35em] text-[#C79A4B]">{title}</h2>
+        </CardHeader>
+
+        <Carousel
+            setApi={carousel.setApi}
+            opts={{ loop: true }}
+            plugins={[carousel.plugin]}
+            className="-mt-6 flex w-full flex-1 flex-col justify-between"
+        >
+          <CarouselBody isLoading={isLoading} stocks={stocks} />
+
+          <div className="pointer-events-none absolute top-[35%] left-2 z-20 scale-90 opacity-0 transition-all duration-300 group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100">
+            <CarouselPrevious className={CAROUSEL_NAV} />
+          </div>
+          <div className="pointer-events-none absolute top-[35%] right-2 z-20 scale-90 opacity-0 transition-all duration-300 group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100">
+            <CarouselNext className={CAROUSEL_NAV} />
+          </div>
+        </Carousel>
+      </Card>
+  )
+}
+
 export function SectionCards() {
-  const card1Ref = React.useRef<HTMLDivElement>(null)
-  const card2Ref = React.useRef<HTMLDivElement>(null)
-  const card3Ref = React.useRef<HTMLDivElement>(null)
-  const card4Ref = React.useRef<HTMLDivElement>(null)
+  const [popularStocks, setPopularStocks] = React.useState<StockItem[]>([])
+  const [stockGainers, setStockGainers] = React.useState<StockItem[]>([])
+  const [stockLosers, setStockLosers] = React.useState<StockItem[]>([])
+  const [highestVolumeStocks, sethighestVolumeStocks] = React.useState<StockItem[]>([])
 
-  const [popularStocks, setPopularStocks] = React.useState<StockItem[]>([]);
-  const [stockGainers, setStockGainers] = React.useState<StockItem[]>([]);
-  const [stockLosers, setStockLosers] = React.useState<StockItem[]>([]);
-  const [highestVolumeStocks, sethighestVolumeStocks] = React.useState<StockItem[]>([]);
+  const [isLoadingPopular, setIsLoadingPopular] = React.useState(true)
+  const [isLoadingGainers, setIsLoadingGainers] = React.useState(true)
+  const [isLoadingLosers, setIsLoadingLosers] = React.useState(true)
+  const [isLoadingVolume, setIsLoadingVolume] = React.useState(true)
 
-  // Separate loading flags per card so one endpoint finishing doesn't hide
-  // the skeletons on the others
-  const [isLoadingPopular, setIsLoadingPopular] = React.useState(true);
-  const [isLoadingGainers, setIsLoadingGainers] = React.useState(true);
-  const [isLoadingLosers, setIsLoadingLosers] = React.useState(true);
-  const [isLoadingVolume, setIsLoadingVolume] = React.useState(true);
-
-  const c1 = useCarouselAutoplay(4000, card1Ref, popularStocks.length > 0)
-  const c2 = useCarouselAutoplay(5500, card2Ref, stockGainers.length > 0)
-  const c3 = useCarouselAutoplay(7000, card3Ref, stockLosers.length > 0)
-  const c4 = useCarouselAutoplay(8500, card4Ref, highestVolumeStocks.length > 0)
-
-
-
-  // Initial load
   React.useEffect(() => {
     fetchStockList("http://localhost:8080/api/streams/stocks/most-active", setPopularStocks, setIsLoadingPopular)
   }, [])
@@ -211,134 +277,34 @@ export function SectionCards() {
   }, [])
 
   React.useEffect(() => {
-    fetchStockList("http://localhost:8080/api/streams/stocks/highest-volume", sethighestVolumeStocks, setIsLoadingVolume)
+    fetchStockList(
+        "http://localhost:8080/api/streams/stocks/highest-volume",
+        sethighestVolumeStocks,
+        setIsLoadingVolume
+    )
   }, [])
 
-
-
-  // Live updates
   React.useEffect(() => {
-    const eventSource = new EventSource("http://localhost:8080/api/streams");
+    const eventSource = new EventSource("http://localhost:8080/api/streams")
 
     eventSource.addEventListener("TICK", (event) => {
-      const tick = JSON.parse(event.data);
-      setPopularStocks(prev =>
-          prev.map(stock =>
-              stock.symbol === tick.S
-                  ? { ...stock, price: tick.p, percentageChange: tick.percentageChange }
-                  : stock
+      const tick = JSON.parse(event.data)
+      setPopularStocks((prev) =>
+          prev.map((stock) =>
+              stock.symbol === tick.S ? { ...stock, price: tick.p, percentageChange: tick.percentageChange } : stock
           )
-      );
-    });
+      )
+    })
 
-    return () => eventSource.close();
-  }, []);
-
-
+    return () => eventSource.close()
+  }, [])
 
   return (
-      <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
-
-        {/* CARD 1: DYNAMIC US STOCKS CAROUSEL */}
-        <Card ref={card1Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-          <CardHeader className="px-6 pt-0 pb-0">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
-              MOST ACTIVE STOCKS
-            </h2>
-          </CardHeader>
-
-          <Carousel
-              setApi={c1.setApi}
-              opts={{ loop: true }}
-              plugins={[c1.plugin]}
-              className="w-full flex-1 flex flex-col justify-between -mt-6"
-          >
-            <CarouselBody isLoading={isLoadingPopular} stocks={popularStocks} />
-
-            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-          </Carousel>
-        </Card>
-
-        {/* CARD 2: STOCK GAINERS */}
-        <Card ref={card2Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-          <CardHeader className="px-6 pt-0 pb-0">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
-              Stock Gainers
-            </h2>
-          </CardHeader>
-
-          <Carousel
-              setApi={c2.setApi}
-              opts={{ loop: true }}
-              plugins={[c2.plugin]}
-              className="w-full flex-1 flex flex-col justify-between -mt-6"
-          >
-            <CarouselBody isLoading={isLoadingGainers} stocks={stockGainers} />
-
-            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-          </Carousel>
-        </Card>
-
-        {/* CARD 3: STOCK LOSERS */}
-        <Card ref={card3Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-          <CardHeader className="px-6 pt-0 pb-0">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
-              Stock Losers
-            </h2>
-          </CardHeader>
-
-          <Carousel
-              setApi={c3.setApi}
-              opts={{ loop: true }}
-              plugins={[c3.plugin]}
-              className="w-full flex-1 flex flex-col justify-between -mt-6"
-          >
-            <CarouselBody isLoading={isLoadingLosers} stocks={stockLosers} />
-
-            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-          </Carousel>
-        </Card>
-
-        {/* CARD 4: HIGHEST VOLUME STOCK */}
-        <Card ref={card4Ref} className="@container/card max-w-sm overflow-hidden border shadow-sm relative group flex flex-col justify-between">
-          <CardHeader className="px-6 pt-0 pb-0">
-            <h2 className="text-sm font-bold tracking-widest uppercase text-muted-foreground/80">
-              HIGHEST VOLUME STOCK
-            </h2>
-          </CardHeader>
-
-          <Carousel
-              setApi={c4.setApi}
-              opts={{ loop: true }}
-              plugins={[c4.plugin]}
-              className="w-full flex-1 flex flex-col justify-between -mt-6"
-          >
-            <CarouselBody isLoading={isLoadingVolume} stocks={highestVolumeStocks} />
-
-            <div className="absolute left-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselPrevious className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-            <div className="absolute right-2 top-[35%] z-20 transition-all duration-300 opacity-0 pointer-events-none scale-90 group-hover:opacity-100 group-hover:pointer-events-auto group-hover:scale-100">
-              <CarouselNext className="relative left-0 top-0 translate-y-0 size-7" />
-            </div>
-          </Carousel>
-        </Card>
-
+      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+        <MarketCarousel title="MOST ACTIVE" isLoading={isLoadingPopular} stocks={popularStocks} delay={4000} />
+        <MarketCarousel title="GAINERS" isLoading={isLoadingGainers} stocks={stockGainers} delay={5500} />
+        <MarketCarousel title="LOSERS" isLoading={isLoadingLosers} stocks={stockLosers} delay={7000} />
+        <MarketCarousel title="HIGHEST VOLUME" isLoading={isLoadingVolume} stocks={highestVolumeStocks} delay={8500} />
       </div>
   )
 }
