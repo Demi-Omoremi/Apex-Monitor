@@ -2,6 +2,14 @@
 
 A professional real-time market monitoring application with live streaming data, interactive charts, and customizable alerts.
 
+[![Apex Monitor Demo](https://img.youtube.com/vi/wlHnguhEu6A/maxresdefault.jpg)](https://youtu.be/wlHnguhEu6A)
+
+*Click to watch the full demo on YouTube*
+
+## Why I Built This
+
+Apex Monitor is a personal project built to explore real-time, event-driven systems end-to-end: SSE streaming, Kafka-based async processing, and a layered Spring Boot backend paired with a modern Next.js frontend. It's a full-stack sandbox for practicing patterns used in production trading and monitoring tools — live data pipelines, historical charting, and alerting.
+
 ## Overview
 
 Apex Monitor is a full-stack financial monitoring platform that provides real-time market data visualization, stock tracking, and alert management. The application features a modern, cinematic UI with live Server-Sent Events (SSE) streaming for instant price updates.
@@ -109,24 +117,6 @@ docker-compose up -d
 Configure the following in `backend/src/main/resources/application.properties`:
 
 - Database connection settings
-- Alpaca API credentials
-- Kafka configuration
-- SSE endpoint settings
-
-### Frontend Configuration
-
-Configure environment variables in `frontend/.env`:
-
-```
-NEXT_PUBLIC_API_URL=http://localhost:8080
-NEXT_PUBLIC_LOGO_DEV_KEY=your_logo_dev_key_here
-```
-
-### Backend Configuration
-
-Configure the following in `backend/src/main/resources/application.properties`:
-
-- Database connection settings
 - Kafka configuration
 - SSE endpoint settings
 
@@ -140,6 +130,15 @@ ALPACA_SECRET_KEY=your_alpaca_api_secret_key
 ```
 
 These credentials are required for accessing market data through the Alpaca API.
+
+### Frontend Configuration
+
+Configure environment variables in `frontend/.env`:
+
+```
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_LOGO_DEV_KEY=your_logo_dev_key_here
+```
 
 ## API Endpoints
 
@@ -217,19 +216,11 @@ The application uses a custom dark theme with a professional color palette:
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+This is a personal portfolio project and isn't currently accepting outside contributions, but feel free to fork it and adapt it for your own use.
 
 ## License
 
-This project is proprietary software. All rights reserved.
-
-## Support
-
-For support and inquiries, please contact the development team.
+MIT
 
 ## Acknowledgments
 
