@@ -164,6 +164,9 @@ public class AlertController {
         try {
             alertRuleRepository.deleteById(Long.parseLong(id));
         } catch (NumberFormatException ignored) {
+            // not a numeric id, nothing to delete
+        } catch (org.springframework.dao.EmptyResultDataAccessException ignored) {
+            // already deleted (e.g. by a concurrent clear-all) — desired end state reached, not an error
         }
     }
 

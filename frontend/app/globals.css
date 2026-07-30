@@ -4,10 +4,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@import "tailwindcss";
-
-@custom-variant dark (&:is(.dark *));
-
 :root {
     --background: oklch(1.0000 0 0);
     --foreground: oklch(0.1408 0.0044 285.8229);
@@ -68,19 +64,19 @@
     --foreground: oklch(0.9842 0.0034 247.8575);
     --card: oklch(0.2077 0.0398 265.7549);
     --card-foreground: oklch(0.9842 0.0034 247.8575);
-    --popover: oklch(0.1288 0.0406 264.6952);
-    --popover-foreground: oklch(0.9842 0.0034 247.8575);
+    --popover: #0C0B09;
+    --popover-foreground: #EDE6D8;
     --primary: oklch(0.6959 0.1491 162.4796);
     --primary-foreground: oklch(0.1288 0.0406 264.6952);
     --secondary: oklch(0.2795 0.0368 260.0310);
     --secondary-foreground: oklch(0.9842 0.0034 247.8575);
     --muted: oklch(0.2795 0.0368 260.0310);
     --muted-foreground: oklch(0.7107 0.0351 256.7878);
-    --accent: oklch(0.2795 0.0368 260.0310);
-    --accent-foreground: oklch(0.9842 0.0034 247.8575);
-    --destructive: oklch(0.6368 0.2078 25.3313);
+    --accent: rgb(199 154 75 / 0.12);
+    --accent-foreground: #EDE6D8;
+    --destructive: #A85D45;
     --destructive-foreground: oklch(0.9842 0.0034 247.8575);
-    --border: oklch(0.2795 0.0368 260.0310);
+    --border: rgb(199 154 75 / 0.2);
     --input: oklch(0.2795 0.0368 260.0310);
     --ring: oklch(0.6959 0.1491 162.4796);
     --chart-1: oklch(0.6959 0.1491 162.4796);
@@ -221,42 +217,33 @@
     * {
         @apply border-border outline-ring/50;
     }
+    html {
+        @apply font-sans;
+    }
     body {
         @apply bg-background text-foreground;
         letter-spacing: var(--tracking-normal);
     }
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-    }
-  body {
-    @apply bg-background text-foreground;
-    }
-  html {
-    @apply font-sans;
-    }
-}
-
 /* Apex Monitor bespoke palette — established in app/page.tsx */
 .apex-grain {
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .apex-vignette {
-  background: radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+    background: radial-gradient(ellipse at 50% 55%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
 }
 .apex-breathe {
-  animation: apex-breathe-anim 2.4s ease-in-out infinite;
+    animation: apex-breathe-anim 2.4s ease-in-out infinite;
 }
 @keyframes apex-breathe-anim {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .apex-breathe {
-    animation: none !important;
-  }
+    .apex-breathe {
+        animation: none !important;
+    }
 }

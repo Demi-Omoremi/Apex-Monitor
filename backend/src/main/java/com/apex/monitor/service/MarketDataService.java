@@ -113,11 +113,6 @@ public class MarketDataService {
             }
         }
 
-        // Correct the most recent bar's close with the verified official-close print.
-        // Alpaca's bars endpoint has no "regular session only" option, so its raw
-        // `close` can be contaminated by after-hours trades the same way a naive
-        // "last trade" lookup was — this reuses the same M/6-tagged verification
-        // logic already proven correct for AAPL.
         if (!histBar.isEmpty()) {
             MarketBar lastBar = histBar.get(histBar.size() - 1);
             LocalDate lastBarDate = lastBar.timestamp()

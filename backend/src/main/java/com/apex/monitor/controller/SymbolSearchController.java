@@ -25,8 +25,6 @@ public class SymbolSearchController {
             return List.of();
         }
 
-
-
         String clean = query.trim();
 
         return assetRepository.searchAssets(clean, PageRequest.of(0, 10));

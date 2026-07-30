@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,7 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class IngestionService extends TextWebSocketHandler {
     private volatile WebSocketSession currentSession;
-    private final AlpacaAPI alpacaAPI;
     private final AlpacaConfig alpacaConfig;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -39,14 +39,15 @@ public class IngestionService extends TextWebSocketHandler {
     private final TickerTracker tickerTracker;
     private final SseService sseService;
 
-    private final Set<String> activeSubscriptions = ConcurrentHashMap.newKeySet();
-    private final List<String> baselineSymbols = List.of("AAPL", "MSFT", "SPY", "QQQ", "TSLA", "FAKEPACA");
-    private  boolean subscriptionInitialized = false;
 
-    public IngestionService(AlpacaAPI alpacaAPI, AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
+    private  boolean subscriptionInitialized = false;
+    private final Object sessionLock = new Object();
+
+
+    public IngestionService(AlpacaConfig alpacaConfig, ObjectMapper objectMapper,
                             KafkaTemplate<String, Object> kafkaTemplate, AlertRuleRepository alertRuleRepository,
                             AlertRegistry alertRegistry, TickerTracker tickerTracker, SseService sseService) {
-        this.alpacaAPI = alpacaAPI;
+
         this.alpacaConfig = alpacaConfig;
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
@@ -95,13 +96,8 @@ public class IngestionService extends TextWebSocketHandler {
         String rawJson = message.getPayload();
         System.out.println("Received stream payload: " + rawJson);
 
-        // STEP 2: Inspect the incoming message
         if (rawJson.contains("\"msg\":\"authenticated\"")) {
             System.out.println("Authentication confirmed by Alpaca! Sending subscription details...");
-
-
-            // Now that you are officially inside, ask for the specific tickers you want
-
 
             String subJson = String.format("{\"action\": \"subscribe\", \"trades\": %s}",
                     objectMapper.writeValueAsString(tickerTracker.getPopularSymbols()));
@@ -120,30 +116,16 @@ public class IngestionService extends TextWebSocketHandler {
 
 
 
-
-
-
-//            System.out.println("📊 Core baseline stream initiated for: " + baselineSymbols);
-
         } else if (rawJson.contains("\"T\":\"t\"")){
             try {
                 List<MarketTick> ticks = objectMapper.readValue(rawJson, new TypeReference<List<MarketTick>>() {});
 
                 for (MarketTick tick: ticks) {
-                    //test in terminal the data is coming out
-
-                    //Shoot into Kafka
                     kafkaTemplate.send("market-ticks", tick.symbol(), tick);
-
-
-
-
                 }
             } catch (Exception e) {
                 System.err.println("Failed to parse incoming market ticks: " + e.getMessage());
             }
-            // STEP 3: If it's not an authentication message, it's live streaming market data!
-            // This is where you will parse the metrics and eventually hand them off to Kafka.
         }
 
         System.out.println("Active subscriptions: " + tickerTracker.getSubscriptionSymbols());
@@ -164,51 +146,83 @@ public class IngestionService extends TextWebSocketHandler {
             return SubscribeResult.limitReached(TickerTracker.MAX_SUBSCRIPTIONS);
         }
 
-        if (currentSession != null && currentSession.isOpen()) {
-            try {
-                String subJson = String.format("{\"action\": \"subscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
-                currentSession.sendMessage(new TextMessage(subJson));
-                MarketTick marketTick = tickerTracker.initMarketTick(cleanSymbol);
-                tickerTracker.addSubscription(marketTick);
-                System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
-                sseService.broadcast("subscription-added", marketTick);
-                return SubscribeResult.subscribed(marketTick);
-            } catch (Exception e) {
-                System.err.println("Failed to send dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
-                return SubscribeResult.failed(cleanSymbol, e.getMessage());
+        synchronized (sessionLock) {
+            // re-check inside the lock — another thread may have subscribed
+            // this exact symbol while we were waiting for the lock
+            MarketTick raceCheck = tickerTracker.getSubscription(cleanSymbol);
+            if (raceCheck != null) {
+                return SubscribeResult.alreadySubscribed(raceCheck);
+            }
+
+            if (currentSession != null && currentSession.isOpen()) {
+                try {
+                    String subJson = String.format("{\"action\": \"subscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
+                    currentSession.sendMessage(new TextMessage(subJson));
+                    MarketTick marketTick = tickerTracker.initMarketTick(cleanSymbol);
+                    tickerTracker.addSubscription(marketTick);
+                    System.out.println("Alpaca stream expanded! Added: " + cleanSymbol + ".");
+                    sseService.broadcast("subscription-added", marketTick);
+                    return SubscribeResult.subscribed(marketTick);
+                } catch (Exception e) {
+                    System.err.println("Failed to send dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
+                    return SubscribeResult.failed(cleanSymbol, e.getMessage());
+                }
             }
         }
 
         return SubscribeResult.failed(cleanSymbol, "Market stream is not connected yet");
     }
 
+
+
     public boolean unsubscribeFromStock(String symbol) {
         String cleanSymbol = symbol.toUpperCase().trim();
+        if (!tickerTracker.isActiveSubscription(cleanSymbol)) return false;
 
-        if (!tickerTracker.isActiveSubscription(cleanSymbol)) {
-            System.out.println("Already not streaming data for " + cleanSymbol + ".");
-            return false;
-        }
-
-        if (currentSession != null && currentSession.isOpen()) {
-            try {
-                String unsubJson = String.format("{\"action\": \"unsubscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
-                currentSession.sendMessage(new TextMessage(unsubJson));
-                MarketTick removed = tickerTracker.removeSubscription(cleanSymbol);
-
-                if (removed != null) {
-                    System.out.println("Alpaca stream shrank! unsubscribed: " + cleanSymbol + ".");
-                    return true;
-                } else {
-                    System.err.println("Unable to delete " + cleanSymbol + " from subscription list.");
+        synchronized (sessionLock) {
+            if (currentSession != null && currentSession.isOpen()) {
+                try {
+                    String unsubJson = String.format("{\"action\": \"unsubscribe\", \"trades\": [\"%s\"]}", cleanSymbol);
+                    currentSession.sendMessage(new TextMessage(unsubJson));
+                    MarketTick removed = tickerTracker.removeSubscription(cleanSymbol);
+                    return removed != null;
+                } catch (Exception e) {
+                    System.err.println("Failed to delete dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
                 }
-
-            } catch (Exception e) {
-                System.err.println("Failed to delete dynamic subscription for " + cleanSymbol + ": " + e.getMessage());
             }
         }
-
         return false;
+    }
+
+    public List<String> unsubscribeAll() {
+        List<String> symbols = tickerTracker.getSubscriptions().stream()
+                .map(MarketTick::symbol)
+                .toList();
+
+        if (symbols.isEmpty()) {
+            return List.of();
+        }
+
+        synchronized (sessionLock) {
+            if (currentSession != null && currentSession.isOpen()) {
+                try {
+                    String symbolsJson = objectMapper.writeValueAsString(symbols);
+                    String unsubJson = String.format("{\"action\": \"unsubscribe\", \"trades\": %s}", symbolsJson);
+                    currentSession.sendMessage(new TextMessage(unsubJson));
+
+                    List<String> removed = new ArrayList<>();
+                    for (String symbol : symbols) {
+                        if (tickerTracker.removeSubscription(symbol) != null) {
+                            removed.add(symbol);
+                        }
+                    }
+                    return removed;
+                } catch (Exception e) {
+                    System.err.println("Failed to send bulk unsubscribe: " + e.getMessage());
+                }
+            }
+        }
+        return List.of();
     }
 
 

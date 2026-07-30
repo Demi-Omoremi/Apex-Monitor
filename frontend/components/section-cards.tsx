@@ -17,19 +17,9 @@ import { ChartUpIcon, ChartDownIcon, Loading03Icon } from "@hugeicons/core-free-
 import { StockItem } from "@/components/MarketTypes"
 import { toast } from "sonner"
 
-// ---------------------------------------------------------------------------
-// Trend classification
-//
-// Treats near-zero moves as "flat" rather than false-positive "up" (the old
-// `percentageChange >= 0` check meant an exact 0.00% stock showed as
-// "Trending up"). Also treats missing/malformed data as its own state so a
-// bad SSE tick or a not-yet-loaded symbol renders "—" instead of crashing
-// on `.toFixed(2)` or showing misleading copy.
-// ---------------------------------------------------------------------------
-
 type Trend = "up" | "down" | "flat" | "unknown"
 
-const FLAT_THRESHOLD = 0.005 // percent; anything tighter than this reads as "flat," not a real move
+const FLAT_THRESHOLD = 0.005
 
 function getTrend(percentageChange: number | null | undefined): Trend {
   if (percentageChange == null || Number.isNaN(percentageChange)) return "unknown"

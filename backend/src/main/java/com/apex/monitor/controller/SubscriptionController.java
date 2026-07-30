@@ -72,6 +72,20 @@ public class SubscriptionController {
         ));
     }
 
+    @DeleteMapping("/unsubscribe/all")
+    public ResponseEntity<?> unsubscribeAll() {
+        List<String> removed = ingestionService.unsubscribeAll();
+
+        for (String symbol : removed) {
+            sseService.broadcast("subscription-removed", Map.of("symbol", symbol));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "removed", removed
+        ));
+    }
+
     @GetMapping(value = "/subscribe-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamTicks() {
         return sseService.createConnection();

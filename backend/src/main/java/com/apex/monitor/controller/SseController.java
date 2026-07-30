@@ -16,9 +16,4 @@ public class SseController {
     public SseController(SseService service) {
         this.service = service;
     }
-
-//    @GetMapping(path = "/api/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-//    public SseEmitter streamEvent() {
-//        return service.createConnection();
-//    }
 }

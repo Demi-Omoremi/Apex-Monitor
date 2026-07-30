@@ -61,20 +61,13 @@ public class MarketConsumerService {
             tickerTracker.updateSubscriptions(enriched);
             marketTickRepository.save(entity);
 
-            
-
-
             service.broadcast("tick", enriched);
-
-
 
         } catch (Exception e) {
             System.err.println("Error processing consumed Kafka message: " + e.getMessage());
         }
 
     }
-
-
 
     public void checkTrigger(MarketTick marketTick) {
         String cleanSymbol = marketTick.symbol().toUpperCase().trim();
@@ -86,7 +79,6 @@ public class MarketConsumerService {
         }
 
         Instant now = Instant.now();
-        // copy to avoid mutating the list you're iterating over
         for (AlertRule rule : new ArrayList<>(ruleList)) {
             if (!isConditionMet(rule, currentPrice)) {
                 continue;
@@ -98,12 +90,11 @@ public class MarketConsumerService {
             kafkaTemplate.send("triggered-alerts", rule.id(), triggeredAlert);
             service.broadcast("alert-update", triggeredAlert);
 
-            // rule has done its job — remove it so it can't fire again
-            alertRegistry.deleteAlert(cleanSymbol, rule.id());
+            alertRegistry.deleteAlert(rule.id(), cleanSymbol);
             alertCooldownMap.remove(rule.id());
             service.broadcast("alert-removed", Map.of("id", rule.id()));
 
-            System.out.printf("➔ [Engine] Triggered alert for %s at $%.2f (target %s $%.2f)%n",
+            System.out.printf("Triggered alert for %s at $%.2f (target %s $%.2f)%n",
                     cleanSymbol, currentPrice, rule.condition(), rule.targetPrice());
         }
     }

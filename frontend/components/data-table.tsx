@@ -76,22 +76,7 @@ import {
     StarIcon,
 } from "@hugeicons/core-free-icons"
 import { useSse } from "@/components/SseContext"
-import { CreateAlertDialog } from "@/components/create-alert-dialog" // ← adjust path if yours differs
-
-/**
- * Restyled to match the Apex Monitor identity established in app/page.tsx —
- * a fixed, bespoke palette, intentionally outside the app's accent-theme system:
- *   #0C0B09  void   — background
- *   #C79A4B  brass  — hairlines, timecode/labels, the one accent
- *   #EDE6D8  bone   — primary text
- *   #8B8478  fog    — secondary text
- *   #6E8F71  moss   — price up
- *   #A85D45  rust   — price down / "live" indicator dot
- *
- * Rows read as ledger entries (hairline dividers, no boxed cards) rather than
- * shadcn's default card treatment, to stay in step with the letterbox-bar
- * language of the landing page.
- */
+import { CreateAlertDialog } from "@/components/create-alert-dialog"
 
 function formatTimestamp(value: string): string {
     const date = new Date(value)
@@ -104,8 +89,6 @@ function formatTimestamp(value: string): string {
     })
 }
 
-// Shared "did the price just move, and which way" flash used by both
-// stock rows and alert rows.
 function usePriceFlash(price: string | number) {
     const prevPriceRef = React.useRef(price)
     const [flash, setFlash] = React.useState<"up" | "down" | null>(null)
@@ -239,9 +222,9 @@ function AlertRow({
                     <HugeiconsIcon icon={MoreVerticalCircle01Icon} strokeWidth={2} />
                     <span className="sr-only">Open menu</span>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36 border-[#C79A4B]/20 bg-[#0C0B09] text-[#EDE6D8]">
+                <DropdownMenuContent align="end" className="w-36" style={{ backgroundColor: "#0C0B09", color: "#EDE6D8", borderColor: "rgba(199,154,75,0.2)" }}>
                     <DropdownMenuItem
-                        className="focus:bg-[#C79A4B]/10 focus:text-[#EDE6D8]"
+                        className="font-mono text-xs uppercase tracking-wide"
                         onClick={() => onToggleFavorite(item.id, isFavorite)}
                     >
                         {isFavorite ? "Unfavorite" : "Favorite"}
@@ -249,7 +232,8 @@ function AlertRow({
                     <DropdownMenuSeparator className="bg-[#C79A4B]/10" />
                     <DropdownMenuItem
                         variant="destructive"
-                        className="text-[#A85D45] focus:bg-[#A85D45]/10 focus:text-[#A85D45]"
+                        className="font-mono text-xs uppercase tracking-wide"
+                        style={{ color: "#A85D45" }}
                         onClick={() => onDelete(item.id)}
                     >
                         Delete
@@ -372,9 +356,9 @@ function StockRow({
                         <HugeiconsIcon icon={MoreVerticalCircle01Icon} strokeWidth={2} />
                         <span className="sr-only">Open menu</span>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 border-[#C79A4B]/20 bg-[#0C0B09] text-[#EDE6D8]">
+                    <DropdownMenuContent align="end" className="w-36" style={{ backgroundColor: "#0C0B09", color: "#EDE6D8", borderColor: "rgba(199,154,75,0.2)" }}>
                         <DropdownMenuItem
-                            className="focus:bg-[#C79A4B]/10 focus:text-[#EDE6D8]"
+                            className="font-mono text-xs uppercase tracking-wide"
                             onClick={() => onToggleFavorite(item.id, isFavorite)}
                         >
                             {isFavorite ? "Unfavorite" : "Favorite"}
@@ -382,7 +366,8 @@ function StockRow({
                         <DropdownMenuSeparator className="bg-[#C79A4B]/10" />
                         <DropdownMenuItem
                             variant="destructive"
-                            className="text-[#A85D45] focus:bg-[#A85D45]/10 focus:text-[#A85D45]"
+                            className="font-mono text-xs uppercase tracking-wide"
+                            style={{ color: "#A85D45" }}
                             onClick={() => onDelete(item.id)}
                         >
                             Delete
@@ -411,6 +396,45 @@ function SortableStockCard(props: {
             <StockRow {...props} />
         </div>
     )
+}
+
+function useDominantColor(src: string) {
+    const [color, setColor] = React.useState<string | null>(null)
+
+    React.useEffect(() => {
+        if (!src) return
+        let cancelled = false
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.src = src
+
+        img.onload = () => {
+            if (cancelled) return
+            try {
+                const size = 10
+                const canvas = document.createElement("canvas")
+                canvas.width = size
+                canvas.height = size
+                const ctx = canvas.getContext("2d")
+                if (!ctx) return
+                ctx.drawImage(img, 0, 0, size, size)
+                const { data } = ctx.getImageData(0, 0, size, size)
+
+                // sample the four corners — usually the logo's actual background, not the icon itself
+                const corners = [0, (size - 1) * 4, (size - 1) * size * 4, (size * size - 1) * 4]
+                let r = 0, g = 0, b = 0
+                corners.forEach((i) => { r += data[i]; g += data[i + 1]; b += data[i + 2] })
+                setColor(`rgb(${Math.round(r / 4)}, ${Math.round(g / 4)}, ${Math.round(b / 4)})`)
+            } catch {
+                setColor(null) // canvas tainted by CORS — fall back silently
+            }
+        }
+        img.onerror = () => setColor(null)
+
+        return () => { cancelled = true }
+    }, [src])
+
+    return color
 }
 
 function ConfirmClearAllDialog({
@@ -442,7 +466,7 @@ function ConfirmClearAllDialog({
                         Clear all {label}?
                     </AlertDialogTitle>
                     <AlertDialogDescription className="text-[#8B8478]">
-                        This removes all {count} {label} you're currently tracking. This can't be undone.
+                        This removes all {count} {label} you&#39;re currently tracking. This can&#39;t be undone.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -546,6 +570,8 @@ export function DataTable({ symbol }: { symbol: string }) {
         }
         loadNews()
     }, [symbol])
+
+
 
     // initial alerts snapshot
     React.useEffect(() => {
@@ -738,19 +764,12 @@ export function DataTable({ symbol }: { symbol: string }) {
         setFavoriteStocks(new Set())
 
         try {
-            const results = await Promise.allSettled(
-                toRemove.map((item) =>
-                    fetch(`http://localhost:8080/api/streams/unsubscribe?symbol=${encodeURIComponent(item.symbol)}`, {
-                        method: "DELETE",
-                    })
-                )
-            )
-            const failed = results.some((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok))
-            if (failed) throw new Error("Some unsubscriptions failed")
+            const response = await fetch("http://localhost:8080/api/streams/unsubscribe/all", { method: "DELETE" })
+            if (!response.ok) throw new Error("Failed to clear all subscriptions")
             toast.success("Cleared all tracked symbols.")
         } catch (error) {
             console.error("Clear all failed:", error)
-            toast.error("Some symbols may not have been removed — refresh to check.")
+            toast.error("Failed to clear all symbols — refresh to check.")
             setData(toRemove)
         }
     }
@@ -789,8 +808,8 @@ export function DataTable({ symbol }: { symbol: string }) {
                 `http://localhost:8080/api/streams/alerts/${encodeURIComponent(symbol)}/${encodeURIComponent(id)}`,
                 { method: "DELETE" }
             )
-            if (!response.ok) throw new Error("Failed to delete alert")
-            toast.success(`Removed alert for ${symbol}.`)
+            if (!response.ok && response.status !== 404) throw new Error("Failed to delete alert")
+            if (response.ok) toast.success(`Removed alert for ${symbol}.`)
         } catch (error) {
             console.error("Delete alert failed:", error)
             toast.error(`Failed to remove alert for ${symbol}.`)
@@ -1096,6 +1115,9 @@ export function DataTable({ symbol }: { symbol: string }) {
 
 function TableCellViewer({ item }: { item: StockRowData }) {
     const isMobile = useIsMobile()
+    const logoSrc = `https://img.logo.dev/ticker/${item.symbol}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}`
+    const dominantColor = useDominantColor(logoSrc)
+
     return (
         <Drawer direction={isMobile ? "bottom" : "right"}>
             <DrawerTrigger asChild>
@@ -1112,23 +1134,16 @@ function TableCellViewer({ item }: { item: StockRowData }) {
                 </DrawerHeader>
                 <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
                     {!isMobile && (
-                        <div className="relative w-full overflow-hidden rounded-sm border border-[#C79A4B]/10">
+                        <div
+                            className="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-sm border border-[#C79A4B]/10 transition-colors duration-500"
+                            style={{ backgroundColor: dominantColor ?? "#0C0B09" }}
+                        >
                             <img
-                                src={`https://img.logo.dev/ticker/${item.symbol}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}`}
-                                alt=""
-                                aria-hidden="true"
-                                className="absolute inset-0 h-full w-full scale-150 object-cover opacity-40 blur-2xl"
+                                src={logoSrc}
+                                alt={`${item.symbol} logo`}
+                                className="h-28 w-28 object-contain drop-shadow-md"
+                                onError={(e) => { e.currentTarget.src = "/fallback-logo.png" }}
                             />
-                            <div className="relative flex items-center justify-center py-10">
-                                <img
-                                    src={`https://img.logo.dev/ticker/${item.symbol}?token=${process.env.NEXT_PUBLIC_LOGO_DEV_KEY}`}
-                                    alt={`${item.symbol} logo`}
-                                    className="h-24 w-24 object-contain drop-shadow-md"
-                                    onError={(e) => {
-                                        e.currentTarget.src = "/fallback-logo.png"
-                                    }}
-                                />
-                            </div>
                         </div>
                     )}
                     <form className="flex flex-col gap-4">
@@ -1173,7 +1188,7 @@ function TableCellViewer({ item }: { item: StockRowData }) {
                             </Label>
                             <Input
                                 id="timestamp"
-                                value={item.timestamp}
+                                value={formatTimestamp(item.timestamp)}
                                 readOnly
                                 className="rounded-sm border-[#C79A4B]/20 bg-transparent font-mono text-[#EDE6D8]"
                             />

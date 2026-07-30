@@ -7,19 +7,6 @@ import { ArrowRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-/**
- * A fixed, bespoke palette for this page only — a "title sequence" moment
- * that intentionally sits outside the app's accent-theme system:
- *   #0C0B09  void   — background
- *   #C79A4B  brass  — hairlines, timecode, the one accent
- *   #EDE6D8  bone   — primary text
- *   #8B8478  fog    — secondary text
- *   #6E8F71  moss   — price up
- *   #A85D45  rust   — price down
- *
- * Ticker prices are simulated client-side for atmosphere only — the real
- * dashboard runs on the live SSE feed.
- */
 const TICKER_SEED = [
     { symbol: "AAPL", price: 231.14 },
     { symbol: "NVDA", price: 138.72 },
@@ -29,7 +16,6 @@ const TICKER_SEED = [
     { symbol: "GOOGL", price: 179.42 },
     { symbol: "META", price: 512.88 },
     { symbol: "JPM", price: 214.67 },
-    // { symbol: "BTC-USD", price: 96830.5 },
 ]
 
 export default function Page() {
@@ -45,7 +31,6 @@ export default function Page() {
 
     const [ticker, setTicker] = useState(TICKER_SEED.map((t) => ({ ...t, change: 0 })))
 
-    // Entrance + motion preference, once on mount.
     useEffect(() => {
         const raf = requestAnimationFrame(() => setReady(true))
         const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -58,8 +43,6 @@ export default function Page() {
         }
     }, [])
 
-    // A running timecode, like a camera's burned-in counter. Mutates the DOM
-    // directly so a 24fps readout doesn't re-render the rest of the page.
     useEffect(() => {
         const start = performance.now()
         let rafId: number
@@ -78,7 +61,6 @@ export default function Page() {
         return () => cancelAnimationFrame(rafId)
     }, [])
 
-    // Ambient jitter so the chyron feels alive. Decorative only.
     useEffect(() => {
         const id = setInterval(() => {
             setTicker((prev) =>
@@ -91,9 +73,6 @@ export default function Page() {
         return () => clearInterval(id)
     }, [])
 
-    // Drives the exit wipe: expand a couple of frames after mount (so the
-    // transition has something to animate from), then hand off to the router
-    // once the screen reads as fully covered.
     useEffect(() => {
         if (!exiting) return
         let raf2 = 0
@@ -109,7 +88,7 @@ export default function Page() {
     }, [exiting, router])
 
     function handleEnter(e: React.MouseEvent<HTMLAnchorElement>) {
-        if (reducedMotion) return // let the real link navigate immediately
+        if (reducedMotion) return
         e.preventDefault()
         if (exiting) return
         const rect = enterRef.current?.getBoundingClientRect()
@@ -128,7 +107,6 @@ export default function Page() {
             <div className="apex-vignette pointer-events-none absolute inset-0" />
             <div className="apex-flicker pointer-events-none absolute inset-0" />
 
-            {/* top letterbox bar */}
             <header
                 className={cn(
                     "apex-rise relative z-10 flex h-10 shrink-0 items-center justify-between border-b border-[#C79A4B]/20 px-5 sm:h-12 sm:px-8",
@@ -140,12 +118,11 @@ export default function Page() {
                     <span className="apex-breathe h-1.5 w-1.5 rounded-full bg-[#A85D45]" />
                     <span>REC</span>
                     <span ref={timecodeRef} className="tabular-nums text-[#C79A4B]">
-            00:00:00
-          </span>
+                        00:00:00
+                    </span>
                 </div>
             </header>
 
-            {/* hero */}
             <main className="relative z-10 flex flex-1 flex-col justify-end px-5 pb-10 sm:px-8 lg:px-20 lg:pb-16">
                 <div className="max-w-xl">
                     <p
@@ -192,7 +169,6 @@ export default function Page() {
                 </div>
             </main>
 
-            {/* bottom letterbox bar / chyron */}
             <div
                 className={cn(
                     "apex-rise relative z-10 h-9 shrink-0 overflow-hidden border-t border-[#C79A4B]/20 sm:h-10",
@@ -213,7 +189,6 @@ export default function Page() {
                 </div>
             </div>
 
-            {/* exit — a clean iris wipe, cut to black */}
             {exiting && (
                 <div className="pointer-events-none fixed inset-0 z-[100]">
                     <div

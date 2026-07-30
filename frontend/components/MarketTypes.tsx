@@ -78,7 +78,7 @@ export const alertRuleSchema = z.object({
     id: z.coerce.string(),
     symbol: z.string(),
     targetPrice: z.number(),
-    condition: z.enum(["ABOVE", "BELOW", "ABOVE_OR_EQUAL", "BELOW_OR_EQUAL"]).catch("ABOVE"), // Adjust based on your exact Java enum/string values
+    condition: z.enum(["ABOVE", "BELOW", "ABOVE_OR_EQUAL", "BELOW_OR_EQUAL"]).catch("ABOVE"),
 })
 
 export type AlertRule = z.infer<typeof alertRuleSchema>

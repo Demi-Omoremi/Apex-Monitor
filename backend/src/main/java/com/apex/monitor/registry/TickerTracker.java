@@ -166,6 +166,7 @@ public class TickerTracker {
 
     public MarketTick removeSubscription(String symbol) {
         String clean = symbol.toUpperCase().trim();
+        subscriptionSymbols.remove(clean);
 
         if (subscriptions.containsKey(clean)) {
             MarketTick removed = subscriptions.get(clean);
@@ -362,7 +363,7 @@ public class TickerTracker {
         try {
             getDailyBars(symbols);
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt(); // restore interrupt status
+            Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while fetching daily bars", e);
         } catch (IOException e) {
             throw new RuntimeException("Failed to fetch daily bars from Alpaca", e);

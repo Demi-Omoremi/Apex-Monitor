@@ -29,32 +29,12 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
-import type { MarketBar } from "@/components/MarketTypes" // ← adjust to your actual path
+import type { MarketBar } from "@/components/MarketTypes"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowUpBigIcon, ArrowDownBigIcon } from "@hugeicons/core-free-icons"
 
 export const description = "An interactive area chart"
 
-/**
- * Restyled to match the Apex Monitor identity established in app/page.tsx —
- * a fixed, bespoke palette, intentionally outside the app's accent-theme system:
- *   #0C0B09  void   — background
- *   #C79A4B  brass  — hairlines, labels, neutral/no-data trend
- *   #EDE6D8  bone   — primary text
- *   #8B8478  fog    — secondary text
- *   #6E8F71  moss   — price up
- *   #A85D45  rust   — price down
- *
- * The area/line trend color follows the same up/down convention as the
- * ticker chyron on the landing page, falling back to brass while loading
- * or when there's no directional data yet.
- */
-
-// Rounds via Intl.NumberFormat instead of raw .toFixed(2), which sidesteps
-// the classic binary floating-point rounding bug — e.g. 340.005 is stored
-// as 340.00499999999999545, so .toFixed(2) truncates it to "340.00"
-// instead of the expected "340.01". Used for every dollar/percent figure
-// rendered in this card.
 function formatDecimal(value: number): string {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
@@ -71,7 +51,6 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-// Days subtracted per time-range key
 const TIMEFRAME_LABELS: Record<string, string> = {
   "1d":   "1D",
   "5d":   "5D",
@@ -86,7 +65,6 @@ interface ChartAreaInteractiveProps {
   symbolSelector?: React.ReactNode
 }
 
-// Helper outside your component
 function formatTick(value: string, timeRange: string): string {
   const date = new Date(value)
 
@@ -148,13 +126,6 @@ function useMarketBars(symbol: string, timeRange: string) {
   return state
 }
 
-// Always fetches the 1D window, independent of whatever range the chart
-// itself is showing. Since the backend's intraday filter
-// (isMarketHours in MarketDataService) strips pre/post-market prints,
-// the last bar here is guaranteed to be either the live regular-session
-// price (market open) or the most recent 4:00pm close (market closed) —
-// never an after-hours print. This is what the header price should track,
-// not whatever the currently-toggled range's last bar happens to be.
 function useLatestQuote(symbol: string) {
   const [quote, setQuote] = React.useState<{ price: number | null; time: string | null }>({
     price: null,
@@ -186,33 +157,18 @@ export function ChartAreaInteractive({ symbol, symbolSelector }: ChartAreaIntera
   const { data, previousClose, loading, error } = useMarketBars(symbol, timeRange)
   const { price: headerPrice } = useLatestQuote(symbol)
 
-  // Chart-specific "latest point" — must come from the currently-selected
-  // range's own data, since it's used to place the ReferenceDot on the
-  // chart's x-axis. Using the 1D quote's timestamp here would place the
-  // dot at an x-value that doesn't exist in a 90-day/1-year series.
   const chartLatestBar = data[data.length - 1]
   const chartLatestTime = chartLatestBar?.timestamp
 
   const firstBar = data[0]
-  // For 1D/5D, previousClose comes from the backend anchor (the true prior
-  // close) rather than the window's first intraday print, which fixed the
-  // change-since-open vs change-since-close bug. Daily timeframes fall
-  // back to the old behavior since previousClose is null there.
   const firstClose = previousClose ?? firstBar?.close
 
-  // Price change is now anchored to the live/market-hours header price
-  // rather than the selected range's last bar. This matters most for
-  // daily ranges (30d/90d/etc.), where the range's own "last bar" only
-  // reflects a completed daily close and won't include today's
-  // still-in-progress intraday movement the way headerPrice does.
   const priceChange =
       headerPrice != null && firstClose != null ? headerPrice - firstClose : null
   const percentChange =
       priceChange != null && firstClose ? (priceChange / firstClose) * 100 : null
   const isPositive = priceChange != null && priceChange >= 0
 
-  // Trend color follows the same up/moss, down/rust convention as the
-  // landing page ticker; brass while there's no directional data yet.
   const trendColor = priceChange == null ? "#C79A4B" : isPositive ? "#6E8F71" : "#A85D45"
 
   return (
@@ -343,10 +299,6 @@ export function ChartAreaInteractive({ symbol, symbolSelector }: ChartAreaIntera
                       }
                   />
 
-                  {/* Single area — no stacking. type="linear" plots straight
-                      point-to-point segments (like a real trading chart)
-                      instead of a smoothed curve that can visually imply
-                      price movement between ticks that never happened. */}
                   <Area
                       dataKey="close"
                       type="linear"
